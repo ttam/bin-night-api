@@ -37,4 +37,9 @@ return [
         ],
     ],
 
+    'twilio' => [
+        'phone_number' => \env('TWILIO_PHONE_NUMBER'),
+        'sid' => \env('TWILIO_SID'),
+        'secret' => \env('TWILIO_SECRET'),
+    ],
 ];

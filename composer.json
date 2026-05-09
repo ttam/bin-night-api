@@ -9,10 +9,13 @@
     ],
     "license": "MIT",
     "require": {
+        "ext-openssl": "*",
         "ext-pdo": "*",
         "php": "^8.4",
+        "clerkinc/backend-php": "^0.6.0",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
+        "symfony/cache": "^8.0",
         "twilio/sdk": "^8.11"
     },
     "require-dev": {

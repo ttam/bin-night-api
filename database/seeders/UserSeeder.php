@@ -12,6 +12,7 @@ final class UserSeeder extends Seeder
     public function run(): void
     {
         User::query()->updateOrCreate(['email' => 'admin@binnight.app'], [
+            'external_id' => \env('CLERK_USER_ID'),
             'name' => 'Admin',
             'password' => \bcrypt('admin'),
         ]);

@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 final class House extends Model
 {
+    public string $binNight {
+        get => $this->getAttribute('bin_night');
+    }
+
     public DateTimeZone $timezone {
         get => new DateTimeZone($this->getAttribute('timezone'));
     }

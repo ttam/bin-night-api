@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Cycle;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -19,7 +20,7 @@ return new class() extends Migration {
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('house_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->string('cycle');
+            $table->enum('cycle', \array_column(Cycle::cases(), 'value'));
             $table->date('start_date');
             $table->enum('day_of_week', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])->nullable();
             $table->tinyInteger('week_of_month')->nullable();

@@ -18,6 +18,10 @@ final class Notification extends Model
         get => $this->getAttribute('lead_days');
     }
 
+    public ?string $sendTime {
+        get => $this->getAttribute('send_time');
+    }
+
     public string $target {
         get => $this->getAttribute('target');
     }

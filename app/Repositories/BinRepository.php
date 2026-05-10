@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Auth\AuthenticatedUser;
 use App\Models\Bin;
 use App\Models\Notification;
 use App\Repositories\Interfaces\BinRepositoryInterface;
@@ -11,7 +12,7 @@ use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
-final class BinRepository implements BinRepositoryInterface
+final readonly class BinRepository implements BinRepositoryInterface
 {
     /** @inheritDoc */
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection
@@ -47,5 +48,15 @@ final class BinRepository implements BinRepositoryInterface
                     ->where('day_of_week', $dayOfWeek)
                     ->where('week_of_month', $weekOfMonth))
             )->get();
+    }
+
+    /** @inheritDoc */
+    public function getBinsForUser(AuthenticatedUser $user): Collection
+    {
+        return new Bin()->newQuery()
+            ->select('bins.*')
+            ->join('users', 'users.id', '=', 'bins.user_id')
+            ->where('users.external_id', '=', $user->id)
+            ->get();
     }
 }

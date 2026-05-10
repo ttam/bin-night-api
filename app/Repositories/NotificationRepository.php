@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Auth\AuthenticatedUser;
 use App\Models\Notification;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 
-final class NotificationRepository implements NotificationRepositoryInterface
+final readonly class NotificationRepository implements NotificationRepositoryInterface
 {
     /** @inheritDoc */
     public function getDueNotifications(DateTimeInterface $dateTime): Collection
@@ -23,6 +24,16 @@ final class NotificationRepository implements NotificationRepositoryInterface
             ->select('notifications.*')
             ->join('houses', 'notifications.house_id', '=', 'houses.id')
             ->whereRaw($condition, [$dateTime, $dateTime])
+            ->get();
+    }
+
+    /** @inheritDoc */
+    public function getNotificationsForUser(AuthenticatedUser $user): Collection
+    {
+        return new Notification()->newQuery()
+            ->select('notifications.*')
+            ->join('users', 'users.id', '=', 'notifications.user_id')
+            ->where('users.external_id', '=', $user->id)
             ->get();
     }
 }

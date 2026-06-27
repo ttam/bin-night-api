@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\House\CreateHouse;
+use App\DTO\House\UpdateHouse;
+use App\Enums\DayOfWeek;
 use App\Models\House;
 use App\Repositories\HouseRepository;
 use Illuminate\Database\Capsule\Manager as DB;
@@ -17,6 +20,22 @@ final class HouseRepositoryTest extends TestCase
     {
         $this->bootEloquent()->migrate();
     }
+
+    public function testCreateHouse(): void
+    {
+        DB::table('users')->insert([['id' => '1', 'external_id' => 'user_111']]);
+
+        $house = new HouseRepository()->createHouse(
+            new AuthenticatedUser(['sub' => 'user_111']),
+            new CreateHouse(DayOfWeek::MONDAY, 'Example', new \DateTimeZone('America/Los_Angeles')),
+        );
+
+        self::assertSame('monday', $house->binNight);
+        self::assertSame('Example', $house->name);
+        self::assertSame('1', $house->userId);
+        self::assertSame('America/Los_Angeles', $house->timezone->getName());
+    }
+
     public function testGetHousesForUser(): void
     {
         DB::table('users')->insert([
@@ -37,6 +56,19 @@ final class HouseRepositoryTest extends TestCase
         self::assertEquals(['1', '2'], $results->pluck('id')->all());
     }
 
+    public function testUpdateHouse(): void
+    {
+        DB::table('users')->insert([['id' => 1, 'external_id' => 'user_111']]);
+        DB::table('houses')->insert([['id' => '1', 'user_id' => '1']]);
+
+        $result = new HouseRepository()->updateHouse(
+            new House()->newQuery()->first(),
+            new UpdateHouse(['name' => 'Example']),
+        );
+
+        self::assertSame('Example', $result->name);
+    }
+
     private function migrate(): void
     {
         DB::schema()->create('users', static function (Blueprint $table): void {
@@ -45,8 +77,13 @@ final class HouseRepositoryTest extends TestCase
         });
 
         DB::schema()->create('houses', static function (Blueprint $table): void {
-            $table->increments('id');
+            $table->string('id');
             $table->string('user_id');
+            $table->string('bin_night')->nullable();
+            $table->string('name')->nullable();
+            $table->string('timezone')->nullable();
+            $table->timestamp('created_at')->nullable();
+            $table->timestamp('updated_at')->nullable();
         });
     }
 }

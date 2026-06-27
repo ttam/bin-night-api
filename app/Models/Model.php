@@ -14,10 +14,6 @@ abstract class Model extends EloquentModel
     use HasFactory;
     use HasUuids;
 
-    public string $id {
-        get => $this->getKey();
-    }
-
     public string $userId {
         get => $this->getAttribute('user_id');
     }

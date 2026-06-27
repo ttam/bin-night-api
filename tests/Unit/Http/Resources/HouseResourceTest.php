@@ -16,11 +16,13 @@ final class HouseResourceTest extends TestCase
         $house = new House()
             ->setAttribute('bin_night', 'saturday')
             ->setAttribute('id', 'house-1')
+            ->setAttribute('name', 'Example')
             ->setAttribute('timezone', 'America/Los_Angeles');
 
         self::assertSame([
             'bin_night' => 'saturday',
             'id' => 'house-1',
+            'name' => 'Example',
             'timezone' => 'America/Los_Angeles',
         ], new HouseResource($house)->toArray(new Request()));
     }

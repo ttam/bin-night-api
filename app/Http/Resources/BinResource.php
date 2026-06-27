@@ -13,7 +13,7 @@ final class BinResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->resource->id,
+            'id' => $this->resource->getKey(),
             'name' => $this->resource->name,
             'next_bin_night' => $this->resource->computedNextBinNight?->format('Y-m-d'),
         ];

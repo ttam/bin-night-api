@@ -14,7 +14,8 @@ final class HouseResource extends JsonResource
     {
         return [
             'bin_night' => $this->resource->binNight,
-            'id' => $this->resource->id,
+            'id' => $this->resource->getKey(),
+            'name' => $this->resource->name,
             'timezone' => $this->resource->timezone->getName(),
         ];
     }

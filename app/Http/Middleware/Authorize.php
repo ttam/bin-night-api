@@ -26,7 +26,7 @@ final class Authorize extends Middleware
         $user = $this->userRepository->getUserFromExternalId($request->user()->id);
         $this->gate = $this->gate->forUser($user);
 
-        $models = \array_map(fn (string $model): string => $this->classMap[$model], $models);
+        $models[0] = $this->classMap[$models[0]];
 
         return parent::handle($request, $next, $ability, ...$models);
     }

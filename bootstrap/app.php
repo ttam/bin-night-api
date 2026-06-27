@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\AuthenticateBearerToken;
+use App\Http\Middleware\Authorize;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,6 +18,7 @@ return Application::configure(basePath: \dirname(__DIR__))
     )
     ->withMiddleware(static function (Middleware $middleware): void {
         $middleware->alias([
+            'can' => Authorize::class,
             'jwt.auth' => AuthenticateBearerToken::class,
         ]);
     })

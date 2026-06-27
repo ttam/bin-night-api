@@ -13,6 +13,7 @@ Route::prefix('v1')->group(static function (Registrar $route): void {
         $route->get('bins', Bins\ListController::class);
 
         $route->get('houses', Houses\ListController::class);
+        $route->post('houses', Houses\CreateController::class)->middleware('can:create,house');
 
         $route->get('notifications', Notifications\ListController::class);
     });

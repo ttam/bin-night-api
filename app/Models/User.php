@@ -27,6 +27,11 @@ class User extends Authenticatable
         return $this->hasMany(Bin::class);
     }
 
+    public function houses(): HasMany
+    {
+        return $this->hasMany(House::class);
+    }
+
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class);

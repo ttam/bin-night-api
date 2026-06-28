@@ -8,18 +8,32 @@ use App\Auth\AuthenticatedUser;
 use App\Auth\Authenticators\Interfaces\TokenAuthenticatorInterface;
 use App\Auth\Exceptions\AuthenticationFailedException;
 use Closure;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 final readonly class AuthenticateBearerToken
 {
-    public function __construct(private TokenAuthenticatorInterface $authenticator)
+    private const array DEVELOPMENT_ENVIRONMENTS = ['development', 'local', 'testing'];
+
+    public function __construct(private Repository $config, private TokenAuthenticatorInterface $authenticator)
     {
     }
 
     public function handle(Request $request, Closure $next): Response
     {
+        $developmentUser = $this->config->get('authentication.clerk.development_user');
+        $isDevelopment = \in_array($this->config->get('app.env'), self::DEVELOPMENT_ENVIRONMENTS, true);
+
+        if ($isDevelopment && \is_string($developmentUser) && \trim($developmentUser) !== '') {
+            $request->setUserResolver(
+                static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => $developmentUser])
+            );
+
+            return $next($request);
+        }
+
         $token = $request->bearerToken();
 
         if (\is_string($token) === false || \trim($token) === '') {

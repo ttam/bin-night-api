@@ -19,7 +19,7 @@ final class HousePolicy
 
     public function update(User $user, House $house): Response
     {
-        return $house->userId === $user->id
+        return $house->userId === $user->getKey()
             ? Response::allow()
             : Response::denyAsNotFound();
     }

@@ -22,10 +22,6 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
     use HasUuids;
 
-    public string $id {
-        get => $this->getKey();
-    }
-
     public function bins(): HasMany
     {
         return $this->hasMany(Bin::class);

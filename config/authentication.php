@@ -6,6 +6,8 @@ return [
     'clerk' => [
         'authorized_parties' => \explode(',', \env('CLERK_AUTHORIZED_PARTIES', '')),
 
+        'development_user' => \env('CLERK_USER_ID'),
+
         'jwks_url' => \env('CLERK_JWKS_URL'),
     ],
 ];

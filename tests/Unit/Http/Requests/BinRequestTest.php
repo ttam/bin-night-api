@@ -7,13 +7,24 @@ namespace Tests\Unit\Http\Requests;
 use App\Http\Requests\Bin\AbstractBinRequest;
 use App\Http\Requests\Bin\CreateBinRequest;
 use App\Http\Requests\Bin\UpdateBinRequest;
+use App\Models\Bin;
+use Illuminate\Database\Capsule\Manager as DB;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
+use Illuminate\Validation\DatabasePresenceVerifier;
 use Illuminate\Validation\Validator;
-use PHPUnit\Framework\TestCase;
+use Tests\Unit\TestCase;
 
 final class BinRequestTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        $this->bootEloquent()->migrate();
+    }
+
     public function testAuthorize(): void
     {
         $request = new class() extends AbstractBinRequest {
@@ -21,6 +32,25 @@ final class BinRequestTest extends TestCase
         };
 
         self::assertTrue($request->authorize());
+    }
+
+    public function testCreateRequestAllowsSameNameInAnotherHouse(): void
+    {
+        DB::table('bins')->insert(['id' => 'b1', 'house_id' => 'h1', 'name' => 'Example']);
+
+        $validator = $this->validateName(new CreateBinRequest(['house_id' => 'h2']));
+
+        self::assertTrue($validator->passes());
+    }
+
+    public function testCreateRequestFailsWithDuplicateName(): void
+    {
+        DB::table('bins')->insert(['id' => 'b1', 'house_id' => 'h1', 'name' => 'Example']);
+
+        $validator = $this->validateName(new CreateBinRequest(['house_id' => 'h1']));
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
     }
 
     public function testCreateRequestFailsWithInvalidHouseId(): void
@@ -48,9 +78,43 @@ final class BinRequestTest extends TestCase
         );
     }
 
+    public function testUpdateRequestAllowsABinToKeepItsOwnName(): void
+    {
+        DB::table('bins')->insert(['id' => 'b1', 'house_id' => 'h1', 'name' => 'Example']);
+
+        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+
+        self::assertTrue($validator->passes());
+    }
+
+    public function testUpdateRequestAllowsANameUsedInAnotherHouse(): void
+    {
+        DB::table('bins')->insert([
+            ['id' => 'b1', 'house_id' => 'h1', 'name' => 'Rubbish'],
+            ['id' => 'b2', 'house_id' => 'h2', 'name' => 'Example'],
+        ]);
+
+        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+
+        self::assertTrue($validator->passes());
+    }
+
     public function testUpdateRequestDoesNotAcceptHouseId(): void
     {
         self::assertArrayNotHasKey('house_id', new UpdateBinRequest()->rules());
+    }
+
+    public function testUpdateRequestFailsWithDuplicateNameInSameHouse(): void
+    {
+        DB::table('bins')->insert([
+            ['id' => 'b1', 'house_id' => 'h1', 'name' => 'Rubbish'],
+            ['id' => 'b2', 'house_id' => 'h1', 'name' => 'Example'],
+        ]);
+
+        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
     }
 
     public function testUpdateRequestFailsWithInvalidColour(): void
@@ -84,9 +148,36 @@ final class BinRequestTest extends TestCase
         self::assertTrue($validator->passes());
     }
 
-
     private function getValidator(array $data, array $rules): Validator
     {
-        return new Validator(new Translator(new ArrayLoader(), 'en-AU'), $data, $rules);
+        $validator = new Validator(new Translator(new ArrayLoader(), 'en-AU'), $data, $rules);
+        $validator->setPresenceVerifier(new DatabasePresenceVerifier(Bin::getConnectionResolver()));
+
+        return $validator;
+    }
+
+    private function makeUpdateRequest(string $binId, string $houseId): UpdateBinRequest
+    {
+        $bin = new Bin()->setAttribute('id', $binId)->setAttribute('house_id', $houseId);
+
+        $route = new Route('PATCH', 'bins/{bin}', static fn (): null => null);
+        $route->bind(Request::create('/bins/' . $binId, 'PATCH'));
+        $route->setParameter('bin', $bin);
+
+        return new UpdateBinRequest()->setRouteResolver(static fn (): Route => $route);
+    }
+
+    private function migrate(): void
+    {
+        DB::schema()->create('bins', static function (Blueprint $table): void {
+            $table->string('id');
+            $table->string('house_id');
+            $table->string('name');
+        });
+    }
+
+    private function validateName(AbstractBinRequest $request): Validator
+    {
+        return $this->getValidator(['name' => 'Example'], ['name' => $request->rules()['name']]);
     }
 }

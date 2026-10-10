@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Auth\AuthenticatedUser;
 use App\Events\NotificationEvent;
+use App\Models\Bin;
+use App\Repositories\Interfaces\ActiveEntityRepositoryInterface;
 use App\Repositories\Interfaces\BinRepositoryInterface;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
 use DateTimeImmutable;
@@ -30,9 +33,10 @@ class TriggerNotifications extends Command
     private const int EXIT_CODE_BAD_INPUT = 5;
 
     public function handle(
+        ActiveEntityRepositoryInterface $activeEntityRepository,
+        BinRepositoryInterface $binRepository,
         ClockInterface $clock,
         Dispatcher $dispatcher,
-        BinRepositoryInterface $binRepository,
         NotificationRepositoryInterface $notificationRepository,
     ): int {
         $dryRun = \boolval($this->option('dry'));
@@ -48,8 +52,21 @@ class TriggerNotifications extends Command
 
         $notifications = $notificationRepository->getDueNotifications($dateTime);
 
+        /** @var array<string, \App\Services\Plan\ActiveEntities> $activeEntities */
+        $activeEntities = [];
+
         foreach ($notifications as $notification) {
-            $bins = $binRepository->getBinsForNotification($notification, $dateTime);
+            $user = new AuthenticatedUser(['sub' => $notification->userExternalId]);
+            $userEntities = $activeEntities[$user->id] ??= $activeEntityRepository->getActiveEntitiesForUser($user);
+
+            if ($userEntities->isNotificationActive($notification) === false) {
+                continue;
+            }
+
+            $bins = $binRepository
+                ->getBinsForNotification($notification, $dateTime)
+                ->filter(static fn (Bin $bin): bool => $userEntities->isBinActive($bin))
+                ->values();
 
             if ($bins->isEmpty()) {
                 continue;

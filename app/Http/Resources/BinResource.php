@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\HasActiveEntities;
 use DateTimeInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -11,15 +12,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @property \App\Models\Bin $resource */
 final class BinResource extends JsonResource
 {
+    use HasActiveEntities;
+
     public function toArray(Request $request): array
     {
+        $active = $this->getActiveEntities($request)->isBinActive($this->resource);
+
         return [
+            'active' => $active,
             'bin_color' => \sprintf('#%s', $this->resource->binColor),
             'cycle' => $this->resource->cycle->value,
             'id' => $this->resource->getKey(),
             'lid_color' => \sprintf('#%s', $this->resource->lidColor),
             'name' => $this->resource->name,
-            'next_bin_night' => $this->resource->computedNextBinNight?->format(DateTimeInterface::ATOM),
+            'next_bin_night' => $active ? $this->resource->computedNextBinNight?->format(DateTimeInterface::ATOM) : null,
         ];
     }
 }

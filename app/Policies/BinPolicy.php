@@ -7,9 +7,11 @@ namespace App\Policies;
 use App\Models\Bin;
 use App\Models\House;
 use App\Models\User;
+use App\Services\Plan\PlanLimits;
 use Illuminate\Auth\Access\Response;
+use Illuminate\Support\Str;
 
-final class BinPolicy
+final readonly class BinPolicy extends AbstractPolicy
 {
     /**
      * $house is null if an invalid one is passed in the request.
@@ -18,9 +20,19 @@ final class BinPolicy
      */
     public function create(User $user, ?House $house): Response
     {
-        return $house?->userId === $user->getKey()
+        if ($house?->userId !== $user->getKey()) {
+            return Response::denyAsNotFound();
+        }
+
+        $limit = $this->planRepository->getLimits($user->plan)->binsPerHouse;
+
+        return ($limit === PlanLimits::UNLIMITED || $house->bins()->count() < $limit)
             ? Response::allow()
-            : Response::denyAsNotFound();
+            : self::limitReached(\sprintf(
+                'Your plan allows %d %s per house.',
+                $limit,
+                Str::plural('bin', $limit),
+            ));
     }
 
     public function update(User $user, Bin $bin): Response

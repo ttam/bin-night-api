@@ -22,6 +22,8 @@ final class NotificationRepositoryTest extends TestCase
 
     public function testGetDueNotificationsFindsRecordsForMultipleTimeZones(): void
     {
+        DB::table('users')->insert(['id' => '1', 'external_id' => 'user_111']);
+
         DB::table('houses')->insert([
             ['id' => '1', 'timezone' => 'Australia/Melbourne'],
             ['id' => '2', 'timezone' => 'America/Los_Angeles'],
@@ -44,6 +46,7 @@ final class NotificationRepositoryTest extends TestCase
         self::assertInstanceOf(Notification::class, $results->first());
         self::assertSame(['3', '5'], $results->pluck('id')->all());
         self::assertSame(2, $results->count());
+        self::assertSame('user_111', $results->first()->userExternalId);
     }
 
     public function testGetNotificationsForUser(): void

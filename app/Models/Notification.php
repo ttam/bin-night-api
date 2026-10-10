@@ -22,6 +22,11 @@ final class Notification extends Model
         get => $this->getAttribute('send_time');
     }
 
+    /** Only present on notifications loaded by NotificationRepository::getDueNotifications(). */
+    public string $userExternalId {
+        get => $this->getAttribute('user_external_id');
+    }
+
     public string $target {
         get => $this->getAttribute('target');
     }

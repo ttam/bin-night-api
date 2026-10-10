@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Controllers\Api\Bins;
 
+use App\Auth\AuthenticatedUser;
 use App\DTO\Bin\UpdateBin;
 use App\Http\Controllers\Api\Bins\UpdateController;
 use App\Http\Requests\Bin\UpdateBinRequest;
@@ -20,7 +21,7 @@ final class UpdateControllerTest extends TestCase
         $validator = new MockGenerator()->testDouble(Validator::class, false);
         $validator->method('validated')->willReturn(['bin_color' => '#000000', 'name' => 'Updated']);
 
-        $request = new UpdateBinRequest()->setValidator($validator);
+        $request = new UpdateBinRequest()->setValidator($validator)->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));
         $bin = new Bin();
 
         $repository = $this->createMock(BinRepositoryInterface::class);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Controllers\Api\Houses;
 
+use App\Auth\AuthenticatedUser;
 use App\Http\Controllers\Api\Houses\UpdateController;
 use App\Http\Requests\House\UpdateHouseRequest;
 use App\Models\House;
@@ -19,7 +20,7 @@ final class UpdateControllerTest extends TestCase
         $validator = new MockGenerator()->testDouble(Validator::class, false);
         $validator->method('validated')->willReturn([]);
 
-        $request = new UpdateHouseRequest()->setValidator($validator);
+        $request = new UpdateHouseRequest()->setValidator($validator)->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));
 
         $repository = $this->createMock(HouseRepositoryInterface::class);
         $repository->expects($this->once())->method('updateHouse')->willReturn(new House(['name' => 'Updated']));

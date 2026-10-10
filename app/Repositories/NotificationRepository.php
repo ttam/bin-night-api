@@ -21,8 +21,9 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
         $condition = \sprintf('%s = %s', $notificationDateTime, $dateTimeHouse);
 
         return new Notification()->newQuery()
-            ->select('notifications.*')
+            ->select('notifications.*', 'users.external_id as user_external_id')
             ->join('houses', 'notifications.house_id', '=', 'houses.id')
+            ->join('users', 'notifications.user_id', '=', 'users.id')
             ->whereRaw($condition, [$dateTime, $dateTime])
             ->get();
     }

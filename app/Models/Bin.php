@@ -6,11 +6,17 @@ namespace App\Models;
 
 use App\Enums\Cycle;
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[Fillable(['bin_color', 'cycle', 'lid_color', 'name'])]
 final class Bin extends Model
 {
+    public string $binColor {
+        get => $this->getAttribute('bin_color');
+    }
+
     public ?DateTimeInterface $computedNextBinNight {
         get => $this->getAttribute('computed_next_bin_night');
     }
@@ -25,6 +31,10 @@ final class Bin extends Model
 
     public House $house {
         get => $this->getRelationValue('house');
+    }
+
+    public string $lidColor {
+        get => $this->getAttribute('lid_color');
     }
 
     public string $name {

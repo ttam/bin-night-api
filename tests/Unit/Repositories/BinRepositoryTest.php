@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Bin\CreateBin;
+use App\DTO\Bin\UpdateBin;
+use App\Enums\Cycle;
 use App\Models\Bin;
 use App\Models\House;
 use App\Models\Notification;
@@ -20,6 +23,25 @@ final class BinRepositoryTest extends TestCase
     protected function setUp(): void
     {
         $this->bootEloquent()->migrate();
+    }
+
+    public function testCreateBin(): void
+    {
+        DB::table('users')->insert([['id' => '1', 'external_id' => 'user_111']]);
+
+        $bin = new BinRepository()->createBin(
+            new AuthenticatedUser(['sub' => 'user_111']),
+            new CreateBin('000000', Cycle::FORTNIGHTLY, 'house-1', 'ffffff', 'Example'),
+        );
+
+        self::assertSame('Example', $bin->name);
+        self::assertSame(Cycle::FORTNIGHTLY, $bin->cycle);
+        self::assertSame('000000', $bin->binColor);
+        self::assertSame('ffffff', $bin->lidColor);
+        self::assertSame('1', $bin->userId);
+        self::assertSame('house-1', $bin->getAttribute('house_id'));
+        self::assertStringStartsWith(\gmdate('Y-m-d'), DB::table('bins')->value('start_date'));
+        self::assertSame('000000', DB::table('bins')->value('bin_color'));
     }
 
     public function testGetBinsForNotificationMatchesCyclesCorrectly(): void
@@ -156,6 +178,23 @@ final class BinRepositoryTest extends TestCase
         self::assertEquals(['1', '2'], $results->pluck('id')->all());
     }
 
+    public function testUpdateBin(): void
+    {
+        DB::table('bins')->insert([
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'cycle' => 'weekly', 'day_of_week' => 'saturday', 'name' => 'Old'],
+        ]);
+
+        $result = new BinRepository()->updateBin(
+            new Bin()->newQuery()->first(),
+            new UpdateBin(['bin_color' => '00dd00', 'name' => 'Example']),
+        );
+
+        self::assertSame('Example', $result->name);
+        self::assertSame('00dd00', $result->binColor);
+        self::assertSame('Example', DB::table('bins')->value('name'));
+        self::assertSame('00dd00', DB::table('bins')->value('bin_color'));
+    }
+
     private function migrate(): void
     {
         DB::schema()->create('users', static function (Blueprint $table): void {
@@ -164,11 +203,14 @@ final class BinRepositoryTest extends TestCase
         });
 
         DB::schema()->create('bins', static function (Blueprint $table): void {
-            $table->increments('id');
+            $table->string('id')->nullable();
             $table->string('house_id');
             $table->string('user_id');
             $table->string('cycle');
-            $table->string('day_of_week');
+            $table->string('name')->nullable();
+            $table->string('bin_color')->nullable();
+            $table->string('lid_color')->nullable();
+            $table->string('day_of_week')->nullable();
             $table->unsignedTinyInteger('week_of_month')->nullable();
             $table->date('start_date')->nullable();
             $table->timestamps();

@@ -9,11 +9,17 @@ use App\Repositories\Interfaces\UserRepositoryInterface;
 use Closure;
 use Illuminate\Auth\Middleware\Authorize as Middleware;
 use Illuminate\Contracts\Auth\Access\Gate;
+use Illuminate\Support\Str;
 
 final class Authorize extends Middleware
 {
     private array $classMap = [
+        'bin' => Models\Bin::class,
         'house' => Models\House::class,
+    ];
+
+    private array $inputMap = [
+        'house_id' => Models\House::class,
     ];
 
     public function __construct(Gate $gate, private readonly UserRepositoryInterface $userRepository)
@@ -29,5 +35,18 @@ final class Authorize extends Middleware
         $models[0] = $this->classMap[$models[0]];
 
         return parent::handle($request, $next, $ability, ...$models);
+    }
+
+    protected function getModel($request, $model)
+    {
+        if (isset($this->inputMap[$model])) {
+            $id = $request->input($model);
+
+            return \is_string($id) && Str::isUuid($id)
+                ? $this->inputMap[$model]::query()->find($id)
+                : null;
+        }
+
+        return parent::getModel($request, $model);
     }
 }

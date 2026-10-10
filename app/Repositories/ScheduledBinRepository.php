@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Bin\CreateBin;
+use App\DTO\Bin\UpdateBin;
 use App\Models\Bin;
 use App\Models\Notification;
 use App\Repositories\Interfaces\BinRepositoryInterface;
@@ -22,19 +24,34 @@ final readonly class ScheduledBinRepository implements BinRepositoryInterface
     ) {
     }
 
+    public function createBin(AuthenticatedUser $authenticatedUser, CreateBin $data): Bin
+    {
+        return $this->withNextBinNight($this->repository->createBin($authenticatedUser, $data));
+    }
+
     /** @inheritDoc */
     public function getBinsForUser(AuthenticatedUser $user): Collection
     {
         return $this->repository
             ->getBinsForUser($user)
-            ->each(fn (Bin $bin): Bin => $bin->setAttribute(
-                'computed_next_bin_night',
-                $this->schedule->computeNextBinNight($bin, $this->clock->now()),
-            ));
+            ->each(fn (Bin $bin): Bin => $this->withNextBinNight($bin));
     }
 
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection
     {
         return $this->repository->getBinsForNotification($notification, $now);
+    }
+
+    public function updateBin(Bin $bin, UpdateBin $data): Bin
+    {
+        return $this->withNextBinNight($this->repository->updateBin($bin, $data));
+    }
+
+    private function withNextBinNight(Bin $bin): Bin
+    {
+        return $bin->setAttribute(
+            'computed_next_bin_night',
+            $this->schedule->computeNextBinNight($bin, $this->clock->now()),
+        );
     }
 }

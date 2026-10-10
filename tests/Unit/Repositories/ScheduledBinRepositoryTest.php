@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Bin\CreateBin;
+use App\DTO\Bin\UpdateBin;
+use App\Enums\Cycle;
 use App\Models\Bin;
 use App\Models\Notification;
 use App\Repositories\Interfaces\BinRepositoryInterface;
@@ -47,5 +50,46 @@ final class ScheduledBinRepositoryTest extends TestCase
             new KnownClock(),
             $scheduleService,
         )->getBinsForUser($user)->first()->computedNextBinNight->format('Y-m-d'));
+    }
+
+    public function testUpdateBinDecoratesCorrectly(): void
+    {
+        $bin = new Bin();
+        $data = new UpdateBin(['name' => 'Example']);
+
+        $binRepository = $this->createMock(BinRepositoryInterface::class);
+        $binRepository->expects(self::once())->method('updateBin')->with($bin, $data)->willReturn($bin);
+
+        $scheduleService = $this->createStub(ScheduleServiceInterface::class);
+        $scheduleService->method('computeNextBinNight')->willReturn(new DateTimeImmutable('1985-10-26'));
+
+        $result = new ScheduledBinRepository(
+            $binRepository,
+            new KnownClock(),
+            $scheduleService,
+        )->updateBin($bin, $data);
+
+        self::assertSame('1985-10-26', $result->computedNextBinNight->format('Y-m-d'));
+    }
+
+    public function testCreateBinDecoratesCorrectly(): void
+    {
+        $user = new AuthenticatedUser(['sub' => 'example']);
+        $data = new CreateBin('#00dd00', Cycle::WEEKLY, 'house-1', '#00dd00', 'Example');
+        $bin = new Bin();
+
+        $binRepository = $this->createMock(BinRepositoryInterface::class);
+        $binRepository->expects(self::once())->method('createBin')->with($user, $data)->willReturn($bin);
+
+        $scheduleService = $this->createStub(ScheduleServiceInterface::class);
+        $scheduleService->method('computeNextBinNight')->willReturn(new DateTimeImmutable('1985-10-26'));
+
+        $result = new ScheduledBinRepository(
+            $binRepository,
+            new KnownClock(),
+            $scheduleService,
+        )->createBin($user, $data);
+
+        self::assertSame('1985-10-26', $result->computedNextBinNight->format('Y-m-d'));
     }
 }

@@ -5,15 +5,38 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Bin\CreateBin;
+use App\DTO\Bin\UpdateBin;
 use App\Models\Bin;
 use App\Models\Notification;
+use App\Models\User;
 use App\Repositories\Interfaces\BinRepositoryInterface;
 use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 final readonly class BinRepository implements BinRepositoryInterface
 {
+    public function createBin(AuthenticatedUser $authenticatedUser, CreateBin $data): Bin
+    {
+        $userId = User::query()->where('external_id', $authenticatedUser->id)->value('id');
+
+        $bin = new Bin()->fill([
+            'bin_color' => $data->binColor,
+            'cycle' => $data->cycle->value,
+            'lid_color' => $data->lidColor,
+            'name' => $data->name,
+        ])
+            ->setAttribute('house_id', $data->houseId)
+            ->setAttribute('start_date', new DateTimeImmutable('today', new DateTimeZone('UTC')))
+            ->setAttribute('user_id', $userId);
+
+        $bin->save();
+
+        return $bin;
+    }
+
     /** @inheritDoc */
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection
     {
@@ -58,5 +81,12 @@ final readonly class BinRepository implements BinRepositoryInterface
             ->join('users', 'users.id', '=', 'bins.user_id')
             ->where('users.external_id', '=', $user->id)
             ->get();
+    }
+
+    public function updateBin(Bin $bin, UpdateBin $data): Bin
+    {
+        $bin->fill($data->toDatabaseArray())->save();
+
+        return $bin;
     }
 }

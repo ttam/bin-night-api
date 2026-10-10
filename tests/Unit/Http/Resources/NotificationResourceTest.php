@@ -16,12 +16,14 @@ final class NotificationResourceTest extends TestCase
     {
         $notification = new Notification()
             ->setAttribute('id', 'notification-1')
+            ->setAttribute('lead_days', 2)
             ->setAttribute('send_time', '00:00')
             ->setAttribute('target', '+61400000000')
             ->setAttribute('type', NotificationType::SMS->value);
 
         self::assertSame([
             'id' => 'notification-1',
+            'lead_days' => 2,
             'send_time' => '00:00',
             'target' => '+61400000000',
             'type' => NotificationType::SMS->value,

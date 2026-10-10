@@ -14,6 +14,7 @@ final class NotificationResource extends JsonResource
     {
         return [
             'id' => $this->resource->getKey(),
+            'lead_days' => $this->resource->leadDays,
             'send_time' => $this->resource->sendTime,
             'target' => $this->resource->target,
             'type' => $this->resource->type->value,

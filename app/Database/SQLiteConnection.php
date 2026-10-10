@@ -20,7 +20,7 @@ final class SQLiteConnection extends LaravelConnection
     {
         $pdo = $this->getPdo();
 
-        $pdo->sqliteCreateFunction('CONVERT_TZ', static function (?string $dt, string $fromTz, string $toTz): ?string {
+        $pdo->createFunction('CONVERT_TZ', static function (?string $dt, string $fromTz, string $toTz): ?string {
             static $timezones = [];
 
             if ($dt === null || $fromTz === $toTz) {

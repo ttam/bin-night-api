@@ -11,7 +11,7 @@
     "require": {
         "ext-openssl": "*",
         "ext-pdo": "*",
-        "php": "^8.4",
+        "php": "^8.5",
         "clerkinc/backend-php": "^0.6.0",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
@@ -74,6 +74,7 @@
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
         ],
         "coverage": [
+            "@putenv XDEBUG_MODE=coverage",
             "./vendor/bin/phpunit --coverage-html coverage"
         ],
         "standards": [

@@ -14,7 +14,7 @@ final class SQLiteConnectionTest extends TestCase
 
     protected function setUp(): void
     {
-        $pdo = new PDO('sqlite::memory:');
+        $pdo = PDO::connect('sqlite::memory:');
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         $this->connection = new SQLiteConnection($pdo);

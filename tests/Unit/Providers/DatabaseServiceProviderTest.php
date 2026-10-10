@@ -18,7 +18,7 @@ final class DatabaseServiceProviderTest extends TestCase
         new DatabaseServiceProvider(new Application())->boot();
 
         $resolver = Connection::getResolver('sqlite');
-        $connection = $resolver(new PDO('sqlite::memory:'), ':memory:', '', []);
+        $connection = $resolver(PDO::connect('sqlite::memory:'), ':memory:', '', []);
 
         self::assertInstanceOf(SQLiteConnection::class, $connection);
     }

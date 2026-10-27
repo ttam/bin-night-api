@@ -19,5 +19,7 @@ Route::prefix('v1')->group(static function (Registrar $route): void {
         $route->patch('houses/{house}', Houses\UpdateController::class)->middleware('can:update,house,house')->whereUuid('house');
 
         $route->get('notifications', Notifications\ListController::class);
+        $route->post('notifications', Notifications\CreateController::class)->middleware('can:create,notification,house_id,type');
+        $route->patch('notifications/{notification}', Notifications\UpdateController::class)->middleware('can:update,notification,notification,type')->whereUuid('notification');
     });
 });

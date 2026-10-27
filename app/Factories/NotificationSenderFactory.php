@@ -9,7 +9,6 @@ use App\Factories\Interfaces\NotificationSenderFactoryInterface;
 use App\Services\Notifications;
 use App\Services\Notifications\Interfaces\NotificationSenderInterface;
 use Illuminate\Contracts\Container\Container;
-use InvalidArgumentException;
 
 final readonly class NotificationSenderFactory implements NotificationSenderFactoryInterface
 {
@@ -21,10 +20,6 @@ final readonly class NotificationSenderFactory implements NotificationSenderFact
     {
         return match ($type) {
             NotificationType::SMS => $this->container->make(Notifications\SMSSender::class),
-
-            default => throw new InvalidArgumentException(
-                \sprintf('Unsupported notification type "%s"', $type->value),
-            ),
         };
     }
 }

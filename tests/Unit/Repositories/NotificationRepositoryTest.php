@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Notification\CreateNotification;
+use App\DTO\Notification\UpdateNotification;
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Repositories\NotificationRepository;
 use DateTimeImmutable;
@@ -18,6 +21,24 @@ final class NotificationRepositoryTest extends TestCase
     protected function setUp(): void
     {
         $this->bootConnection()->bootEloquent()->migrate();
+    }
+
+    public function testCreateNotification(): void
+    {
+        DB::table('users')->insert([['id' => '1', 'external_id' => 'user_111']]);
+
+        $notification = new NotificationRepository()->createNotification(
+            new AuthenticatedUser(['sub' => 'user_111']),
+            new CreateNotification('house-1', 2, '18:30', '+61400000000', NotificationType::SMS),
+        );
+
+        self::assertSame(2, $notification->leadDays);
+        self::assertSame('18:30', $notification->sendTime);
+        self::assertSame('+61400000000', $notification->target);
+        self::assertSame(NotificationType::SMS, $notification->type);
+        self::assertSame('1', $notification->userId);
+        self::assertSame('house-1', $notification->getAttribute('house_id'));
+        self::assertSame('18:30', DB::table('notifications')->value('send_time'));
     }
 
     public function testGetDueNotificationsFindsRecordsForMultipleTimeZones(): void
@@ -69,6 +90,25 @@ final class NotificationRepositoryTest extends TestCase
         self::assertEquals(['1', '2'], $results->pluck('id')->all());
     }
 
+    public function testUpdateNotification(): void
+    {
+        DB::table('notifications')->insert([
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '+61400000000', 'lead_days' => 0, 'send_time' => '11:00'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '+61400000001', 'lead_days' => 0, 'send_time' => '11:00'],
+        ]);
+
+        $result = new NotificationRepository()->updateNotification(
+            new Notification()->newQuery()->findOrFail('1'),
+            new UpdateNotification(['lead_days' => 2, 'send_time' => '18:30']),
+        );
+
+        self::assertSame(2, $result->leadDays);
+        self::assertSame('18:30', $result->sendTime);
+        self::assertSame('+61400000000', $result->target);
+        self::assertSame('18:30', DB::table('notifications')->where('id', '1')->value('send_time'));
+        self::assertSame('11:00', DB::table('notifications')->where('id', '2')->value('send_time'));
+    }
+
     private function migrate(): void
     {
         DB::schema()->create('users', static function (Blueprint $table): void {
@@ -87,6 +127,7 @@ final class NotificationRepositoryTest extends TestCase
             $table->string('house_id');
             $table->string('type');
             $table->string('target');
+            $table->integer('lead_days')->default(0);
             $table->integer('offset_days')->default(0);
             $table->string('send_time');
             $table->timestamp('created_at')->nullable();

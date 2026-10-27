@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Middleware;
 
+use App\Enums\NotificationType;
 use App\Http\Middleware\Authorize;
 use App\Models\Bin;
 use App\Models\House;
+use App\Models\Notification;
 use App\Models\User;
 use App\Repositories\Interfaces\UserRepositoryInterface;
 use Illuminate\Auth\Access\Response as AccessResponse;
@@ -44,6 +46,7 @@ final class AuthorizeTest extends TestCase
     {
         yield 'Bin' => ['bin', Bin::class];
         yield 'House' => ['house', House::class];
+        yield 'Notification' => ['notification', Notification::class];
     }
 
     #[DataProvider('getModelValues')]
@@ -81,6 +84,20 @@ final class AuthorizeTest extends TestCase
         self::assertSame($houseId, $arguments[1]->getKey());
     }
 
+    public function testHandlePassesTheTypeThroughAsItIs(): void
+    {
+        DB::table('houses')->insert(['id' => '00000000-0000-0000-0000-000000000000']);
+
+        $arguments = $this->authorizeWithInput(
+            ['house_id' => '00000000-0000-0000-0000-000000000000', 'type' => NotificationType::SMS],
+            ['notification', 'house_id', 'type'],
+        );
+
+        self::assertSame(Notification::class, $arguments[0]);
+        self::assertInstanceOf(House::class, $arguments[1]);
+        self::assertSame(NotificationType::SMS, $arguments[2]);
+    }
+
     #[DataProvider('getBadHouseInputs')]
     public function testHandleSendsNullWithBadHouseInput(array $input): void
     {
@@ -89,7 +106,8 @@ final class AuthorizeTest extends TestCase
         self::assertSame([Bin::class, null], $this->authorizeWithInput($input));
     }
 
-    private function authorizeWithInput(array $input): array
+    /** @param list<string> $models */
+    private function authorizeWithInput(array $input, array $models = ['bin', 'house_id']): array
     {
         $user = new User()->setAttribute('id', '1');
         $captured = [];
@@ -113,8 +131,7 @@ final class AuthorizeTest extends TestCase
             $request,
             static fn (): Response => new Response('ok', 200),
             'create',
-            'bin',
-            'house_id',
+            ...$models,
         );
 
         return $captured;

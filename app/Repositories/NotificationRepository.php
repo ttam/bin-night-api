@@ -5,13 +5,34 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\DTO\Notification\CreateNotification;
+use App\DTO\Notification\UpdateNotification;
 use App\Models\Notification;
+use App\Models\User;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 
 final readonly class NotificationRepository implements NotificationRepositoryInterface
 {
+    public function createNotification(AuthenticatedUser $authenticatedUser, CreateNotification $data): Notification
+    {
+        $userId = User::query()->where('external_id', $authenticatedUser->id)->value('id');
+
+        $notification = new Notification()->fill([
+            'lead_days' => $data->leadDays,
+            'send_time' => $data->sendTime,
+            'target' => $data->target,
+            'type' => $data->type->value,
+        ])
+            ->setAttribute('house_id', $data->houseId)
+            ->setAttribute('user_id', $userId);
+
+        $notification->save();
+
+        return $notification;
+    }
+
     /** @inheritDoc */
     public function getDueNotifications(DateTimeInterface $dateTime): Collection
     {
@@ -36,5 +57,12 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
             ->join('users', 'users.id', '=', 'notifications.user_id')
             ->where('users.external_id', '=', $user->id)
             ->get();
+    }
+
+    public function updateNotification(Notification $notification, UpdateNotification $data): Notification
+    {
+        $notification->fill($data->toDatabaseArray())->save();
+
+        return $notification;
     }
 }

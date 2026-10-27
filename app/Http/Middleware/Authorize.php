@@ -16,11 +16,15 @@ final class Authorize extends Middleware
     private array $classMap = [
         'bin' => Models\Bin::class,
         'house' => Models\House::class,
+        'notification' => Models\Notification::class,
     ];
 
     private array $inputMap = [
         'house_id' => Models\House::class,
     ];
+
+    /** Request input that is handed to the policy as it is, rather than looked up as a model. */
+    private array $valueInputs = ['type'];
 
     public function __construct(Gate $gate, private readonly UserRepositoryInterface $userRepository)
     {
@@ -39,6 +43,10 @@ final class Authorize extends Middleware
 
     protected function getModel($request, $model)
     {
+        if (\in_array($model, $this->valueInputs, true)) {
+            return $request->input($model);
+        }
+
         if (isset($this->inputMap[$model])) {
             $id = $request->input($model);
 

@@ -29,7 +29,7 @@ final class HouseTest extends TestCase
         $relation = new House()->notifications();
 
         self::assertInstanceOf(Notification::class, $relation->getRelated());
-        self::assertSame('bin_id', $relation->getForeignKeyName());
+        self::assertSame('house_id', $relation->getForeignKeyName());
         self::assertSame('id', $relation->getLocalKeyName());
     }
 }

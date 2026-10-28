@@ -13,13 +13,16 @@ Route::prefix('v1')->group(static function (Registrar $route): void {
         $route->get('bins', Bins\ListController::class);
         $route->post('bins', Bins\CreateController::class)->middleware('can:create,bin,house_id');
         $route->patch('bins/{bin}', Bins\UpdateController::class)->middleware('can:update,bin,bin')->whereUuid('bin');
+        $route->delete('bins/{bin}', Bins\DeleteController::class)->middleware('can:delete,bin,bin')->whereUuid('bin');
 
         $route->get('houses', Houses\ListController::class);
         $route->post('houses', Houses\CreateController::class)->middleware('can:create,house');
         $route->patch('houses/{house}', Houses\UpdateController::class)->middleware('can:update,house,house')->whereUuid('house');
+        $route->delete('houses/{house}', Houses\DeleteController::class)->middleware('can:delete,house,house')->whereUuid('house');
 
         $route->get('notifications', Notifications\ListController::class);
         $route->post('notifications', Notifications\CreateController::class)->middleware('can:create,notification,house_id,type');
         $route->patch('notifications/{notification}', Notifications\UpdateController::class)->middleware('can:update,notification,notification,type')->whereUuid('notification');
+        $route->delete('notifications/{notification}', Notifications\DeleteController::class)->middleware('can:delete,notification,notification')->whereUuid('notification');
     });
 });

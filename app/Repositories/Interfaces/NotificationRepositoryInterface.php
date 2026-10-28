@@ -15,6 +15,8 @@ interface NotificationRepositoryInterface
 {
     public function createNotification(AuthenticatedUser $authenticatedUser, CreateNotification $data): Notification;
 
+    public function deleteNotification(Notification $notification): void;
+
     /** @return \Illuminate\Support\Collection<int, \App\Models\Notification> */
     public function getDueNotifications(DateTimeInterface $dateTime): Collection;
 

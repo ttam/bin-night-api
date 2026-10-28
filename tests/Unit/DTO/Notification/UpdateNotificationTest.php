@@ -18,6 +18,7 @@ final class UpdateNotificationTest extends TestCase
         $validator = new MockGenerator()->testDouble(Validator::class, false);
         $validator->method('validated')->willReturn([
             'lead_days' => '2',
+            'name' => 'Marty\'s Phone',
             'send_time' => '18:30',
             'target' => '+61400000000',
             'type' => NotificationType::SMS->value,
@@ -27,6 +28,7 @@ final class UpdateNotificationTest extends TestCase
 
         self::assertSame([
             'lead_days' => 2,
+            'name' => 'Marty\'s Phone',
             'send_time' => '18:30',
             'target' => '+61400000000',
             'type' => 'sms',
@@ -47,6 +49,7 @@ final class UpdateNotificationTest extends TestCase
     {
         $array = new UpdateNotification([
             'lead_days' => 2,
+            'name' => 'Marty\'s Phone',
             'send_time' => '18:30',
             'target' => '+61400000000',
             'type' => NotificationType::SMS,

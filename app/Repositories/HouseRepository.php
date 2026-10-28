@@ -7,7 +7,9 @@ namespace App\Repositories;
 use App\Auth\AuthenticatedUser;
 use App\DTO\House\CreateHouse;
 use App\DTO\House\UpdateHouse;
+use App\Models\Bin;
 use App\Models\House;
+use App\Models\Notification;
 use App\Models\User;
 use App\Repositories\Interfaces\HouseRepositoryInterface;
 use Illuminate\Support\Collection;
@@ -28,6 +30,15 @@ final readonly class HouseRepository implements HouseRepositoryInterface
         $house->save();
 
         return $house;
+    }
+
+    public function deleteHouse(House $house): void
+    {
+        $house->getConnection()->transaction(static function () use ($house): void {
+            $house->bins()->get()->each(static fn (Bin $bin) => $bin->deleteReleasingName());
+            $house->notifications()->get()->each(static fn (Notification $notification) => $notification->deleteReleasingName());
+            $house->deleteReleasingName();
+        });
     }
 
     /** @inheritDoc */

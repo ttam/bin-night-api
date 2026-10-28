@@ -14,6 +14,8 @@ interface HouseRepositoryInterface
 {
     public function createHouse(AuthenticatedUser $authenticatedUser, CreateHouse $data): House;
 
+    public function deleteHouse(House $house): void;
+
     /** @return \Illuminate\Support\Collection<int, \App\Models\House> */
     public function getHousesForUser(AuthenticatedUser $user): Collection;
 

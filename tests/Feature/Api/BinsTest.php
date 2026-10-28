@@ -57,6 +57,53 @@ final class BinsTest extends ApiTestCase
         $this->postJson('/api/v1/bins', [])->assertNotFound();
     }
 
+    public function testDeleteFreesTheNameButRecordsIt(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $binId = $this->createBin($houseId, 'Rubbish', '1985-10-26 01:21:00');
+
+        $this->deleteJson('/api/v1/bins/' . $binId)->assertNoContent();
+
+        self::assertSame($binId . '-Rubbish', DB::table('bins')->where('id', $binId)->value('name'));
+        $this->postJson('/api/v1/bins', $this->validPayload($houseId))->assertCreated()->assertJsonPath('data.name', 'Rubbish');
+    }
+
+    public function testDeleteLetsAnOverLimitUserDeleteAnInactiveBin(): void
+    {
+        $this->useLimits(binsPerHouse: 1);
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->createBin($houseId, 'Older', '1955-11-12 06:00:00');
+        $newerId = $this->createBin($houseId, 'Newer', '2015-10-21 16:29:00');
+
+        $this->deleteJson('/api/v1/bins/' . $newerId)->assertNoContent();
+
+        self::assertNotNull(DB::table('bins')->where('id', $newerId)->value('deleted_at'));
+        $this->getJson('/api/v1/bins')->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Older');
+    }
+
+    public function testDeleteOfAnotherUsersBinIsNotFound(): void
+    {
+        $otherUserId = $this->createUser('user_222');
+        $houseId = $this->createHouse('Lyon Estates', '1985-10-26 01:21:00', $otherUserId);
+        $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00', $otherUserId);
+
+        $this->deleteJson('/api/v1/bins/' . $binId)->assertNotFound();
+
+        self::assertNull(DB::table('bins')->where('id', $binId)->value('deleted_at'));
+    }
+
+    public function testDeleteSoftDeletesTheBin(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $binId = $this->createBin($houseId, 'Rubbish', '1985-10-26 01:21:00');
+        $keptId = $this->createBin($houseId, 'Recycling', '1985-10-26 01:22:00');
+
+        $this->deleteJson('/api/v1/bins/' . $binId)->assertNoContent();
+
+        self::assertNotNull(DB::table('bins')->where('id', $binId)->value('deleted_at'));
+        self::assertNull(DB::table('bins')->where('id', $keptId)->value('deleted_at'));
+    }
+
     public function testListMarksBinsOverThePlanLimitInactive(): void
     {
         $this->useLimits(binsPerHouse: 1);

@@ -29,6 +29,11 @@ final readonly class ScheduledBinRepository implements BinRepositoryInterface
         return $this->withNextBinNight($this->repository->createBin($authenticatedUser, $data));
     }
 
+    public function deleteBin(Bin $bin): void
+    {
+        $this->repository->deleteBin($bin);
+    }
+
     /** @inheritDoc */
     public function getBinsForUser(AuthenticatedUser $user): Collection
     {

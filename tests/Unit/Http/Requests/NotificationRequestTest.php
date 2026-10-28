@@ -88,6 +88,14 @@ final class NotificationRequestTest extends TestCase
         self::assertTrue($request->authorize());
     }
 
+    public function testCreateRequestAllowsANameUsedInAnotherHouse(): void
+    {
+        DB::table('houses')->insert(['id' => '11111111-1111-1111-1111-111111111111']);
+        DB::table('notifications')->insert(['id' => 'n1', 'house_id' => '11111111-1111-1111-1111-111111111111', 'name' => 'Marty\'s Phone']);
+
+        self::assertTrue($this->validate([])->passes());
+    }
+
     #[DataProvider('getTargetExamples')]
     public function testCreateRequestChecksTheTargetFormatOfEveryType(
         NotificationType $type,
@@ -101,6 +109,26 @@ final class NotificationRequestTest extends TestCase
 
         self::assertFalse($validator->passes());
         self::assertSame(['target' => [$message]], $validator->errors()->toArray());
+    }
+
+    public function testCreateRequestFailsWithANameAlreadyUsedInTheHouse(): void
+    {
+        DB::table('notifications')->insert(['id' => 'n1', 'house_id' => self::HOUSE_ID, 'name' => 'Marty\'s Phone']);
+
+        $validator = $this->validate([]);
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
+    }
+
+    public function testCreateRequestFailsWithAnInvalidName(): void
+    {
+        foreach ([\str_repeat('a', 256), ['array'], ''] as $name) {
+            $validator = $this->validate(['name' => $name]);
+
+            self::assertFalse($validator->passes());
+            self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
+        }
     }
 
     #[DataProvider('getBadLeadDays')]
@@ -165,7 +193,7 @@ final class NotificationRequestTest extends TestCase
 
         self::assertFalse($validator->passes());
         self::assertSame(
-            ['lead_days', 'send_time', 'target', 'type', 'house_id'],
+            ['lead_days', 'name', 'send_time', 'target', 'type', 'house_id'],
             \array_keys($validator->errors()->toArray()),
         );
     }
@@ -173,6 +201,14 @@ final class NotificationRequestTest extends TestCase
     public function testMessagesAreEmptyWithoutAType(): void
     {
         self::assertSame([], new CreateNotificationRequest()->messages());
+    }
+
+    public function testUpdateRequestAllowsTheNotificationsOwnName(): void
+    {
+        DB::table('notifications')->insert(['id' => 'n1', 'house_id' => self::HOUSE_ID, 'name' => 'Marty\'s Phone']);
+        $data = ['name' => 'Marty\'s Phone'];
+
+        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules())->passes());
     }
 
     public function testUpdateRequestChecksTheTargetAgainstTheNewTypeWhenItIsSent(): void
@@ -197,7 +233,7 @@ final class NotificationRequestTest extends TestCase
 
     public function testUpdateRequestDoesNotAcceptHouseId(): void
     {
-        self::assertArrayNotHasKey('house_id', new UpdateNotificationRequest()->rules());
+        self::assertArrayNotHasKey('house_id', $this->makeUpdateRequest([], 'sms')->rules());
     }
 
     public function testUpdateRequestExplainsTheTargetFormatOfTheNotificationsOwnType(): void
@@ -214,6 +250,17 @@ final class NotificationRequestTest extends TestCase
         );
     }
 
+    public function testUpdateRequestFailsWithANameAlreadyUsedByAnotherNotificationInTheHouse(): void
+    {
+        DB::table('notifications')->insert(['id' => 'n2', 'house_id' => self::HOUSE_ID, 'name' => 'Doc\'s Phone']);
+        $data = ['name' => 'Doc\'s Phone'];
+
+        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
+    }
+
     public function testUpdateRequestFailsWithInvalidValues(): void
     {
         $data = ['lead_days' => 8, 'send_time' => '11:21', 'type' => 'carrier-pigeon'];
@@ -224,6 +271,11 @@ final class NotificationRequestTest extends TestCase
         self::assertSame(['lead_days', 'send_time', 'type'], \array_keys($validator->errors()->toArray()));
     }
 
+    public function testUpdateRequestPassesWithAnEmptyPayload(): void
+    {
+        self::assertTrue($this->getValidator([], $this->makeUpdateRequest([], 'sms')->rules())->passes());
+    }
+
     public function testUpdateRequestPassesWithAPartialPayload(): void
     {
         $data = ['send_time' => '07:00', 'target' => '+61400000001'];
@@ -231,23 +283,11 @@ final class NotificationRequestTest extends TestCase
         self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules())->passes());
     }
 
-    public function testUpdateRequestPassesWithAnEmptyPayload(): void
-    {
-        self::assertTrue($this->getValidator([], $this->makeUpdateRequest([], 'sms')->rules())->passes());
-    }
-
     public function testUpdateRequestSkipsTheTargetFormatForOtherTypes(): void
     {
         $data = ['target' => 'not-a-phone-number'];
 
         self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'carrier-pigeon')->rules())->passes());
-    }
-
-    public function testUpdateRequestWorksWithoutARouteNotification(): void
-    {
-        $data = ['target' => 'anything'];
-
-        self::assertTrue($this->getValidator($data, new UpdateNotificationRequest($data)->rules())->passes());
     }
 
     private function getValidator(array $data, array $rules, array $messages = []): Validator
@@ -260,7 +300,7 @@ final class NotificationRequestTest extends TestCase
 
     private function makeUpdateRequest(array $input, string $notificationType): UpdateNotificationRequest
     {
-        $notification = new Notification()->setAttribute('id', 'n1')->setAttribute('type', $notificationType);
+        $notification = new Notification()->setAttribute('id', 'n1')->setAttribute('house_id', self::HOUSE_ID)->setAttribute('type', $notificationType);
 
         $route = new Route('PATCH', 'notifications/{notification}', static fn (): null => null);
         $route->bind(Request::create('/notifications/n1', 'PATCH'));
@@ -273,6 +313,13 @@ final class NotificationRequestTest extends TestCase
     {
         DB::schema()->create('houses', static function (Blueprint $table): void {
             $table->string('id');
+            $table->softDeletes();
+        });
+
+        DB::schema()->create('notifications', static function (Blueprint $table): void {
+            $table->string('id');
+            $table->string('house_id');
+            $table->string('name');
         });
     }
 
@@ -282,6 +329,7 @@ final class NotificationRequestTest extends TestCase
         $data = [
             'house_id' => self::HOUSE_ID,
             'lead_days' => 1,
+            'name' => 'Marty\'s Phone',
             'send_time' => '18:30',
             'target' => '+61400000000',
             'type' => 'sms',

@@ -5,13 +5,18 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\NotificationType;
+use App\Models\Concerns\ReleasesNameOnDelete;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['lead_days', 'send_time', 'target', 'type'])]
+#[Fillable(['lead_days', 'name', 'send_time', 'target', 'type'])]
 final class Notification extends Model
 {
+    use ReleasesNameOnDelete;
+    use SoftDeletes;
+
     public House $house {
         get => $this->getRelationValue('house');
     }
@@ -24,13 +29,12 @@ final class Notification extends Model
         get => $this->getAttribute('lead_days');
     }
 
-    public ?string $sendTime {
-        get => $this->getAttribute('send_time');
+    public string $name {
+        get => $this->getAttribute('name');
     }
 
-    /** Only present on notifications loaded by NotificationRepository::getDueNotifications(). */
-    public string $userExternalId {
-        get => $this->getAttribute('user_external_id');
+    public ?string $sendTime {
+        get => $this->getAttribute('send_time');
     }
 
     public string $target {
@@ -44,6 +48,11 @@ final class Notification extends Model
 
             return NotificationType::from($type);
         }
+    }
+
+    /** Only present on notifications loaded by NotificationRepository::getDueNotifications(). */
+    public string $userExternalId {
+        get => $this->getAttribute('user_external_id');
     }
 
     /** @return BelongsTo<Bin, $this> */

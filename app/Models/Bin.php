@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\Cycle;
+use App\Models\Concerns\ReleasesNameOnDelete;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['bin_color', 'cycle', 'lid_color', 'name'])]
 final class Bin extends Model
 {
+    use ReleasesNameOnDelete;
+    use SoftDeletes;
+
     public string $binColor {
         get => $this->getAttribute('bin_color');
     }

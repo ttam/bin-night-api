@@ -44,6 +44,69 @@ final class BinRepositoryTest extends TestCase
         self::assertSame('000000', DB::table('bins')->value('bin_color'));
     }
 
+    public function testDeleteBin(): void
+    {
+        DB::table('bins')->insert([
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'cycle' => 'weekly', 'name' => 'Rubbish'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'cycle' => 'weekly', 'name' => 'Keep'],
+        ]);
+
+        new BinRepository()->deleteBin(new Bin()->newQuery()->findOrFail('1'));
+
+        self::assertSame(['2'], new Bin()->newQuery()->pluck('id')->all());
+        self::assertNotNull(DB::table('bins')->where('id', '1')->value('deleted_at'));
+        self::assertSame('1-Rubbish', DB::table('bins')->where('id', '1')->value('name'));
+        self::assertSame('Keep', DB::table('bins')->where('id', '2')->value('name'));
+    }
+
+    public function testDeleteBinKeepsTheRenamedNameWithinTheColumnLength(): void
+    {
+        $id = '11111111-2222-3333-4444-555555555555';
+        DB::table('bins')->insert([
+            ['id' => $id, 'user_id' => '1', 'house_id' => '1', 'cycle' => 'weekly', 'name' => \str_repeat('é', 255)],
+        ]);
+
+        new BinRepository()->deleteBin(new Bin()->newQuery()->findOrFail($id));
+
+        $name = DB::table('bins')->where('id', $id)->value('name');
+        self::assertSame(255, \mb_strlen($name));
+        self::assertSame($id . '-' . \str_repeat('é', 218), $name);
+    }
+
+    public function testGetBinsForNotificationHandlesOffsetDays(): void
+    {
+        // Positive: weekly that matches the shifted day
+        DB::table('bins')->insert([
+            'user_id' => '1',
+            'house_id' => '1',
+            'cycle' => 'weekly',
+            'day_of_week' => 'monday',
+            'week_of_month' => null,
+            'start_date' => null,
+        ]);
+
+        DB::table('bins')->insert([
+            'user_id' => '1',
+            'house_id' => '1',
+            'cycle' => 'weekly',
+            'day_of_week' => 'saturday',
+            'week_of_month' => null,
+            'start_date' => null,
+        ]);
+
+        $house = new House()->setAttribute('id', '1')->setAttribute('timezone', 'Australia/Melbourne');
+        $notification = new Notification()->house()->associate($house)->setAttribute('lead_days', 2);
+
+        $now = new DateTimeImmutable('1985-10-26 01:21:00', new DateTimeZone('UTC'));
+        $result = new BinRepository()->getBinsForNotification($notification, $now);
+        $bin = $result->first();
+
+        self::assertCount(1, $result);
+        self::assertInstanceOf(Bin::class, $bin);
+        self::assertSame('weekly', $bin->getAttribute('cycle')->value);
+        self::assertSame('monday', $bin->getAttribute('day_of_week'));
+    }
+
     public function testGetBinsForNotificationMatchesCyclesCorrectly(): void
     {
         // Bins we expect to see
@@ -124,40 +187,6 @@ final class BinRepositoryTest extends TestCase
         self::assertEquals(['1', '2', '3'], $results->pluck('id')->all());
     }
 
-    public function testGetBinsForNotificationHandlesOffsetDays(): void
-    {
-        // Positive: weekly that matches the shifted day
-        DB::table('bins')->insert([
-            'user_id' => '1',
-            'house_id' => '1',
-            'cycle' => 'weekly',
-            'day_of_week' => 'monday',
-            'week_of_month' => null,
-            'start_date' => null,
-        ]);
-
-        DB::table('bins')->insert([
-            'user_id' => '1',
-            'house_id' => '1',
-            'cycle' => 'weekly',
-            'day_of_week' => 'saturday',
-            'week_of_month' => null,
-            'start_date' => null,
-        ]);
-
-        $house = new House()->setAttribute('id', '1')->setAttribute('timezone', 'Australia/Melbourne');
-        $notification = new Notification()->house()->associate($house)->setAttribute('lead_days', 2);
-
-        $now = new DateTimeImmutable('1985-10-26 01:21:00', new DateTimeZone('UTC'));
-        $result = new BinRepository()->getBinsForNotification($notification, $now);
-        $bin = $result->first();
-
-        self::assertCount(1, $result);
-        self::assertInstanceOf(Bin::class, $bin);
-        self::assertSame('weekly', $bin->getAttribute('cycle')->value);
-        self::assertSame('monday', $bin->getAttribute('day_of_week'));
-    }
-
     public function testGetBinsForUser(): void
     {
         DB::table('users')->insert([
@@ -214,6 +243,7 @@ final class BinRepositoryTest extends TestCase
             $table->unsignedTinyInteger('week_of_month')->nullable();
             $table->date('start_date')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 }

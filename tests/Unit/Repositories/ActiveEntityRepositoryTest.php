@@ -166,6 +166,7 @@ final class ActiveEntityRepositoryTest extends TestCase
             $table->string('id');
             $table->string('user_id');
             $table->timestamp('created_at')->nullable();
+            $table->softDeletes();
         });
 
         DB::schema()->create('bins', static function (Blueprint $table): void {
@@ -173,6 +174,7 @@ final class ActiveEntityRepositoryTest extends TestCase
             $table->string('user_id');
             $table->string('house_id');
             $table->timestamp('created_at')->nullable();
+            $table->softDeletes();
         });
 
         DB::schema()->create('notifications', static function (Blueprint $table): void {
@@ -181,6 +183,7 @@ final class ActiveEntityRepositoryTest extends TestCase
             $table->string('house_id');
             $table->string('type');
             $table->timestamp('created_at')->nullable();
+            $table->softDeletes();
         });
     }
 

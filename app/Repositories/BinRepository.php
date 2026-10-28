@@ -37,6 +37,11 @@ final readonly class BinRepository implements BinRepositoryInterface
         return $bin;
     }
 
+    public function deleteBin(Bin $bin): void
+    {
+        $bin->deleteReleasingName();
+    }
+
     /** @inheritDoc */
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection
     {

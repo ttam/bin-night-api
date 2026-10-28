@@ -21,6 +21,9 @@ return new class() extends Migration {
             $table->enum('bin_night', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
             $table->string('timezone')->default('Australia/Melbourne');
             $table->timestamps();
+            $table->softDeletes();
+
+            $table->unique(['user_id', 'name']);
         });
     }
 };

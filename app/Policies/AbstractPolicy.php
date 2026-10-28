@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\Model;
+use App\Models\User;
 use App\Repositories\Interfaces\PlanRepositoryInterface;
 use App\Repositories\PlanRepository;
 use Illuminate\Auth\Access\Response;
@@ -19,5 +21,12 @@ abstract readonly class AbstractPolicy
     public static function limitReached(string $message): Response
     {
         return Response::deny($message, self::CODE);
+    }
+
+    public function delete(User $user, Model $model): Response
+    {
+        return $model->userId === $user->getKey()
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 }

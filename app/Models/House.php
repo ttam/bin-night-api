@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\ReleasesNameOnDelete;
 use DateTimeZone;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['bin_night', 'name', 'timezone'])]
 final class House extends Model
 {
+    use ReleasesNameOnDelete;
+    use SoftDeletes;
+
     public string $binNight {
         get => $this->getAttribute('bin_night');
     }
@@ -35,9 +39,9 @@ final class House extends Model
         return $this->hasMany(Bin::class);
     }
 
-    /** @return HasManyThrough<Notification, Bin, $this> */
-    public function notifications(): HasManyThrough
+    /** @return HasMany<Notification, $this> */
+    public function notifications(): HasMany
     {
-        return $this->hasManyThrough(Notification::class, Bin::class);
+        return $this->hasMany(Notification::class);
     }
 }

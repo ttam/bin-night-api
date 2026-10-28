@@ -20,13 +20,11 @@ final class UpdateBinRequest extends AbstractBinRequest
     {
         $rules = parent::rules();
 
+        /** @var Bin $bin */
         $bin = $this->route('bin');
 
-        if ($bin instanceof Bin) {
-            $rules['name'][] = Rule::unique('bins', 'name')
-                ->where('house_id', $bin->houseId)
-                ->ignore($bin);
-        }
+        $houseId = $bin->houseId;
+        $rules['name'][] = Rule::unique('bins', 'name')->where('house_id', $houseId)->ignore($bin);
 
         return $rules;
     }

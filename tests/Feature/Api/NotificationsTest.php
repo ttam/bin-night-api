@@ -16,6 +16,7 @@ final class NotificationsTest extends ApiTestCase
         $this->postJson('/api/v1/notifications', $this->validPayload($houseId))
             ->assertCreated()
             ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.name', 'Marty\'s Phone')
             ->assertJsonPath('data.send_time', '18:30')
             ->assertJsonPath('data.target', '+61400000000')
             ->assertJsonPath('data.type', 'sms');
@@ -45,6 +46,16 @@ final class NotificationsTest extends ApiTestCase
         self::assertSame(1, DB::table('notifications')->count());
     }
 
+    public function testCreateRejectsANameAlreadyUsedInTheHouse(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->createNotification($houseId, '+61400000001', '1955-11-12 06:00:00', name: 'Marty\'s Phone');
+
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name']);
+    }
+
     public function testCreateRejectsAnInvalidPhoneNumberWithAHelpfulMessage(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
@@ -71,12 +82,59 @@ final class NotificationsTest extends ApiTestCase
 
         $this->postJson('/api/v1/notifications', ['house_id' => $houseId])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['lead_days', 'send_time', 'target', 'type']);
+            ->assertJsonValidationErrors(['lead_days', 'name', 'send_time', 'target', 'type']);
     }
 
     public function testCreateWithoutAHouseIsNotFound(): void
     {
         $this->postJson('/api/v1/notifications', [])->assertNotFound();
+    }
+
+    public function testDeleteFreesTheNameButRecordsIt(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00', name: 'Marty\'s Phone');
+
+        $this->deleteJson('/api/v1/notifications/' . $notificationId)->assertNoContent();
+
+        self::assertSame(\sprintf('%s-%s', $notificationId, 'Marty\'s Phone'), DB::table('notifications')->where('id', $notificationId)->value('name'));
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated()->assertJsonPath('data.name', 'Marty\'s Phone');
+    }
+
+    public function testDeleteLetsAnOverLimitUserDeleteAnInactiveNotification(): void
+    {
+        $this->useLimits(notificationsPerHouse: 1);
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+        $newerId = $this->createNotification($houseId, '+61400000001', '2015-10-21 16:29:00');
+
+        $this->deleteJson('/api/v1/notifications/' . $newerId)->assertNoContent();
+
+        self::assertNotNull(DB::table('notifications')->where('id', $newerId)->value('deleted_at'));
+        $this->getJson('/api/v1/notifications')->assertJsonCount(1, 'data');
+    }
+
+    public function testDeleteOfAnotherUsersNotificationIsNotFound(): void
+    {
+        $otherUserId = $this->createUser('user_222');
+        $houseId = $this->createHouse('Lyon Estates', '1985-10-26 01:21:00', $otherUserId);
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00', $otherUserId);
+
+        $this->deleteJson('/api/v1/notifications/' . $notificationId)->assertNotFound();
+
+        self::assertNull(DB::table('notifications')->where('id', $notificationId)->value('deleted_at'));
+    }
+
+    public function testDeleteSoftDeletesTheNotification(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1985-10-26 01:21:00');
+        $keptId = $this->createNotification($houseId, '+61400000001', '1985-10-26 01:22:00');
+
+        $this->deleteJson('/api/v1/notifications/' . $notificationId)->assertNoContent();
+
+        self::assertNotNull(DB::table('notifications')->where('id', $notificationId)->value('deleted_at'));
+        self::assertNull(DB::table('notifications')->where('id', $keptId)->value('deleted_at'));
     }
 
     public function testListLeavesOutOtherUsersNotifications(): void
@@ -179,11 +237,30 @@ final class NotificationsTest extends ApiTestCase
             ->assertJsonValidationErrors(['lead_days', 'send_time', 'type']);
     }
 
+    public function testUpdateRenamesTheNotificationButNotToANameAlreadyInTheHouse(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00', name: 'Marty\'s Phone');
+        $this->createNotification($houseId, '+61400000001', '1955-11-12 06:01:00', name: 'Doc\'s Phone');
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['name' => 'Doc\'s Phone'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name']);
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['name' => 'Marty\'s Phone'])->assertOk();
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['name' => 'Bin text'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Bin text');
+
+        self::assertSame('Bin text', DB::table('notifications')->where('id', $notificationId)->value('name'));
+    }
+
     private function validPayload(string $houseId): array
     {
         return [
             'house_id' => $houseId,
             'lead_days' => 1,
+            'name' => 'Marty\'s Phone',
             'send_time' => '18:30',
             'target' => '+61400000000',
             'type' => 'sms',

@@ -69,7 +69,7 @@ abstract class ApiTestCase extends TestCase
         return $id;
     }
 
-    protected function createNotification(string $houseId, string $target, string $createdAt, ?string $userId = null): string
+    protected function createNotification(string $houseId, string $target, string $createdAt, ?string $userId = null, ?string $name = null): string
     {
         $id = (string) Str::uuid();
 
@@ -77,6 +77,7 @@ abstract class ApiTestCase extends TestCase
             'id' => $id,
             'user_id' => $userId ?? $this->userId,
             'house_id' => $houseId,
+            'name' => $name ?? $target,
             'type' => 'sms',
             'target' => $target,
             'lead_days' => 1,

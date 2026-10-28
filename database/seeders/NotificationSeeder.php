@@ -21,18 +21,21 @@ final class NotificationSeeder extends Seeder
         $notifications = [
             [
                 'type' => NotificationType::SMS,
+                'name' => 'Marty\'s Phone',
                 'target' => '+61400000000',
                 'lead_days' => 0,
                 'send_time' => '11:00',
             ],
             [
                 'type' => NotificationType::SMS,
+                'name' => 'Doc\'s Phone',
                 'target' => '+61400000001',
                 'lead_days' => 1,
                 'send_time' => '18:00',
             ],
             [
                 'type' => NotificationType::SMS,
+                'name' => 'Biff\'s Phone',
                 'target' => '+61411111111',
                 'lead_days' => 0,
                 'send_time' => '13:00',

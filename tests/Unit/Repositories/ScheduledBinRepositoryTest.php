@@ -21,6 +21,41 @@ use Tests\Unit\TestCase;
 
 final class ScheduledBinRepositoryTest extends TestCase
 {
+    public function testCreateBinDecoratesCorrectly(): void
+    {
+        $user = new AuthenticatedUser(['sub' => 'example']);
+        $data = new CreateBin('#00dd00', Cycle::WEEKLY, 'house-1', '#00dd00', 'Example');
+        $bin = new Bin();
+
+        $binRepository = $this->createMock(BinRepositoryInterface::class);
+        $binRepository->expects(self::once())->method('createBin')->with($user, $data)->willReturn($bin);
+
+        $scheduleService = $this->createStub(ScheduleServiceInterface::class);
+        $scheduleService->method('computeNextBinNight')->willReturn(new DateTimeImmutable('1985-10-26'));
+
+        $result = new ScheduledBinRepository(
+            $binRepository,
+            new KnownClock(),
+            $scheduleService,
+        )->createBin($user, $data);
+
+        self::assertSame('1985-10-26', $result->computedNextBinNight->format('Y-m-d'));
+    }
+
+    public function testDeleteBinIsPassedThrough(): void
+    {
+        $bin = new Bin();
+
+        $binRepository = $this->createMock(BinRepositoryInterface::class);
+        $binRepository->expects(self::once())->method('deleteBin')->with($bin);
+
+        new ScheduledBinRepository(
+            $binRepository,
+            new KnownClock(),
+            $this->createStub(ScheduleServiceInterface::class),
+        )->deleteBin($bin);
+    }
+
     public function testGetBinsForNotificationPassesThrough(): void
     {
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -68,27 +103,6 @@ final class ScheduledBinRepositoryTest extends TestCase
             new KnownClock(),
             $scheduleService,
         )->updateBin($bin, $data);
-
-        self::assertSame('1985-10-26', $result->computedNextBinNight->format('Y-m-d'));
-    }
-
-    public function testCreateBinDecoratesCorrectly(): void
-    {
-        $user = new AuthenticatedUser(['sub' => 'example']);
-        $data = new CreateBin('#00dd00', Cycle::WEEKLY, 'house-1', '#00dd00', 'Example');
-        $bin = new Bin();
-
-        $binRepository = $this->createMock(BinRepositoryInterface::class);
-        $binRepository->expects(self::once())->method('createBin')->with($user, $data)->willReturn($bin);
-
-        $scheduleService = $this->createStub(ScheduleServiceInterface::class);
-        $scheduleService->method('computeNextBinNight')->willReturn(new DateTimeImmutable('1985-10-26'));
-
-        $result = new ScheduledBinRepository(
-            $binRepository,
-            new KnownClock(),
-            $scheduleService,
-        )->createBin($user, $data);
 
         self::assertSame('1985-10-26', $result->computedNextBinNight->format('Y-m-d'));
     }

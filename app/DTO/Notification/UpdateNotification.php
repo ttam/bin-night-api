@@ -9,20 +9,24 @@ use App\Http\Requests\Notification\UpdateNotificationRequest;
 
 final readonly class UpdateNotification
 {
-    /** @param array{lead_days?: int, send_time?: string, target?: string, type?: NotificationType} $values */
+    /** @param array{lead_days?: int, name?: string, send_time?: string, target?: string, type?: NotificationType} $values */
     public function __construct(private array $values)
     {
     }
 
     public static function fromRequest(UpdateNotificationRequest $request): self
     {
-        /** @var array{lead_days?: int|string, send_time?: string, target?: string, type?: string} $validated */
+        /** @var array{lead_days?: int|string, name?: string, send_time?: string, target?: string, type?: string} $validated */
         $validated = $request->validated();
 
         $values = [];
 
         if (\array_key_exists('lead_days', $validated)) {
             $values['lead_days'] = \intval($validated['lead_days']);
+        }
+
+        if (\array_key_exists('name', $validated)) {
+            $values['name'] = $validated['name'];
         }
 
         if (\array_key_exists('send_time', $validated)) {
@@ -47,6 +51,10 @@ final readonly class UpdateNotification
 
         if (\array_key_exists('lead_days', $this->values)) {
             $values['lead_days'] = $this->values['lead_days'];
+        }
+
+        if (\array_key_exists('name', $this->values)) {
+            $values['name'] = $this->values['name'];
         }
 
         if (\array_key_exists('send_time', $this->values)) {

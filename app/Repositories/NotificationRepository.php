@@ -21,6 +21,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
 
         $notification = new Notification()->fill([
             'lead_days' => $data->leadDays,
+            'name' => $data->name,
             'send_time' => $data->sendTime,
             'target' => $data->target,
             'type' => $data->type->value,
@@ -31,6 +32,11 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
         $notification->save();
 
         return $notification;
+    }
+
+    public function deleteNotification(Notification $notification): void
+    {
+        $notification->deleteReleasingName();
     }
 
     /** @inheritDoc */

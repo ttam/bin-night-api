@@ -30,6 +30,8 @@ abstract class AbstractNotificationRequest extends FormRequest
         return [
             'lead_days' => [$this->presence, 'integer', 'min:0', 'max:7'],
 
+            'name' => [$this->presence, 'string', 'max:255'],
+
             'send_time' => ['bail', $this->presence, 'date_format:H:i', 'regex:/^\d{2}:(00|30)$/'],
 
             'target' => [$this->presence, 'string', 'max:255', ...$this->getTargetFormat()['rules']],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Policies;
 
 use App\Enums\NotificationType;
+use App\Enums\Plan;
 use App\Models\House;
 use App\Models\Notification;
 use App\Models\User;
@@ -68,7 +69,7 @@ final class NotificationPolicyTest extends TestCase
         self::assertSame('Your plan allows 1 notification per house.', $response->message());
     }
 
-    public function testCreateFailsAtThePlanLimitForThatHouse(): void
+    public function testCreateFailsAtThePlanLimit(): void
     {
         DB::table('notifications')->insert([
             ['id' => 'n1', 'house_id' => 'h1', 'type' => 'sms'],
@@ -112,6 +113,16 @@ final class NotificationPolicyTest extends TestCase
         self::assertSame(404, $response->status());
     }
 
+    public function testCreateLooksUpTheLimitsForTheUsersPlan(): void
+    {
+        $user = $this->user()->setAttribute('plan', Plan::PLUS->value);
+
+        $repository = $this->createMock(PlanRepositoryInterface::class);
+        $repository->expects($this->once())->method('getLimits')->with(Plan::PLUS)->willReturn(new PlanLimits(1, 1, 1, [NotificationType::SMS]));
+
+        new NotificationPolicy($repository)->create($user, $this->house(), 'sms');
+    }
+
     #[DataProvider('getUnknownTypes')]
     public function testCreatePassesWithAnUnknownTypeSoValidationCanReportIt(mixed $type): void
     {
@@ -136,6 +147,30 @@ final class NotificationPolicyTest extends TestCase
     public function testCreatePassesWithUserOwnedHouse(): void
     {
         $response = new NotificationPolicy($this->planRepository())->create($this->user(), $this->house(), 'sms');
+
+        self::assertTrue($response->allowed());
+    }
+
+    public function testDeleteFailsWithOtherUsersNotification(): void
+    {
+        $response = new NotificationPolicy($this->planRepository())
+            ->delete($this->user(), $this->notification('sms', '2'));
+
+        self::assertFalse($response->allowed());
+        self::assertSame(404, $response->status());
+    }
+
+    public function testDeletePassesWithUserOwnedNotification(): void
+    {
+        $response = new NotificationPolicy($this->planRepository())->delete($this->user(), $this->notification('sms'));
+
+        self::assertTrue($response->allowed());
+    }
+
+    public function testDeletePassesWithUserOwnedNotificationEvenWhenTheTypeIsNotInThePlan(): void
+    {
+        $response = new NotificationPolicy($this->planRepository(types: []))
+            ->delete($this->user(), $this->notification('sms'));
 
         self::assertTrue($response->allowed());
     }
@@ -202,6 +237,7 @@ final class NotificationPolicyTest extends TestCase
             $table->string('id');
             $table->string('house_id');
             $table->string('type');
+            $table->softDeletes();
         });
     }
 

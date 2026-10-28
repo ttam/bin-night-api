@@ -16,6 +16,8 @@ interface BinRepositoryInterface
 {
     public function createBin(AuthenticatedUser $authenticatedUser, CreateBin $data): Bin;
 
+    public function deleteBin(Bin $bin): void;
+
     /** @return \Illuminate\Support\Collection<int, \App\Models\Bin> */
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection;
 

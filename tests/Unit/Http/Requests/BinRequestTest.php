@@ -82,7 +82,7 @@ final class BinRequestTest extends TestCase
     {
         DB::table('bins')->insert(['id' => 'b1', 'house_id' => 'h1', 'name' => 'Example']);
 
-        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+        $validator = $this->validateName($this->makeUpdateRequest());
 
         self::assertTrue($validator->passes());
     }
@@ -94,14 +94,14 @@ final class BinRequestTest extends TestCase
             ['id' => 'b2', 'house_id' => 'h2', 'name' => 'Example'],
         ]);
 
-        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+        $validator = $this->validateName($this->makeUpdateRequest());
 
         self::assertTrue($validator->passes());
     }
 
     public function testUpdateRequestDoesNotAcceptHouseId(): void
     {
-        self::assertArrayNotHasKey('house_id', new UpdateBinRequest()->rules());
+        self::assertArrayNotHasKey('house_id', $this->makeUpdateRequest()->rules());
     }
 
     public function testUpdateRequestFailsWithDuplicateNameInSameHouse(): void
@@ -111,7 +111,7 @@ final class BinRequestTest extends TestCase
             ['id' => 'b2', 'house_id' => 'h1', 'name' => 'Example'],
         ]);
 
-        $validator = $this->validateName($this->makeUpdateRequest('b1', 'h1'));
+        $validator = $this->validateName($this->makeUpdateRequest());
 
         self::assertFalse($validator->passes());
         self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
@@ -119,7 +119,7 @@ final class BinRequestTest extends TestCase
 
     public function testUpdateRequestFailsWithInvalidColour(): void
     {
-        $validator = $this->getValidator(['lid_color' => 'green'], new UpdateBinRequest()->rules());
+        $validator = $this->getValidator(['lid_color' => 'green'], $this->makeUpdateRequest()->rules());
 
         self::assertFalse($validator->passes());
         self::assertArrayHasKey('lid_color', $validator->errors()->toArray());
@@ -127,7 +127,7 @@ final class BinRequestTest extends TestCase
 
     public function testUpdateRequestFailsWithInvalidCycle(): void
     {
-        $validator = $this->getValidator(['cycle' => 'bad_cycle'], new UpdateBinRequest()->rules());
+        $validator = $this->getValidator(['cycle' => 'bad_cycle'], $this->makeUpdateRequest()->rules());
 
         self::assertFalse($validator->passes());
         self::assertArrayHasKey('cycle', $validator->errors()->toArray());
@@ -135,14 +135,14 @@ final class BinRequestTest extends TestCase
 
     public function testUpdateRequestPassesWithEmptyPayload(): void
     {
-        self::assertTrue($this->getValidator([], new UpdateBinRequest()->rules())->passes());
+        self::assertTrue($this->getValidator([], $this->makeUpdateRequest()->rules())->passes());
     }
 
     public function testUpdateRequestPassesWithPartialPayload(): void
     {
         $validator = $this->getValidator(
             ['name' => 'Example', 'bin_color' => '#00dd00'],
-            new UpdateBinRequest()->rules()
+            $this->makeUpdateRequest()->rules()
         );
 
         self::assertTrue($validator->passes());
@@ -156,12 +156,12 @@ final class BinRequestTest extends TestCase
         return $validator;
     }
 
-    private function makeUpdateRequest(string $binId, string $houseId): UpdateBinRequest
+    private function makeUpdateRequest(): UpdateBinRequest
     {
-        $bin = new Bin()->setAttribute('id', $binId)->setAttribute('house_id', $houseId);
+        $bin = new Bin()->setAttribute('id', 'b1')->setAttribute('house_id', 'h1');
 
         $route = new Route('PATCH', 'bins/{bin}', static fn (): null => null);
-        $route->bind(Request::create('/bins/' . $binId, 'PATCH'));
+        $route->bind(Request::create('/bins/b1', 'PATCH'));
         $route->setParameter('bin', $bin);
 
         return new UpdateBinRequest()->setRouteResolver(static fn (): Route => $route);
@@ -173,6 +173,7 @@ final class BinRequestTest extends TestCase
             $table->string('id');
             $table->string('house_id');
             $table->string('name');
+            $table->softDeletes();
         });
     }
 

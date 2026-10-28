@@ -29,16 +29,32 @@ final class NotificationRepositoryTest extends TestCase
 
         $notification = new NotificationRepository()->createNotification(
             new AuthenticatedUser(['sub' => 'user_111']),
-            new CreateNotification('house-1', 2, '18:30', '+61400000000', NotificationType::SMS),
+            new CreateNotification('house-1', 2, 'Marty\'s Phone', '18:30', '+61400000000', NotificationType::SMS),
         );
 
         self::assertSame(2, $notification->leadDays);
+        self::assertSame('Marty\'s Phone', $notification->name);
         self::assertSame('18:30', $notification->sendTime);
         self::assertSame('+61400000000', $notification->target);
         self::assertSame(NotificationType::SMS, $notification->type);
         self::assertSame('1', $notification->userId);
         self::assertSame('house-1', $notification->getAttribute('house_id'));
         self::assertSame('18:30', DB::table('notifications')->value('send_time'));
+    }
+
+    public function testDeleteNotification(): void
+    {
+        DB::table('notifications')->insert([
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'name' => 'Marty\'s Phone', 'type' => 'sms', 'target' => '+61400000000', 'send_time' => '11:00'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'name' => 'Keep', 'type' => 'sms', 'target' => '+61400000001', 'send_time' => '11:00'],
+        ]);
+
+        new NotificationRepository()->deleteNotification(new Notification()->newQuery()->findOrFail('1'));
+
+        self::assertSame(['2'], new Notification()->newQuery()->pluck('id')->all());
+        self::assertNotNull(DB::table('notifications')->where('id', '1')->value('deleted_at'));
+        self::assertSame('1-Marty\'s Phone', DB::table('notifications')->where('id', '1')->value('name'));
+        self::assertSame('Keep', DB::table('notifications')->where('id', '2')->value('name'));
     }
 
     public function testGetDueNotificationsFindsRecordsForMultipleTimeZones(): void
@@ -119,12 +135,14 @@ final class NotificationRepositoryTest extends TestCase
         DB::schema()->create('houses', static function (Blueprint $table): void {
             $table->string('id')->primary();
             $table->string('timezone');
+            $table->softDeletes();
         });
 
         DB::schema()->create('notifications', static function (Blueprint $table): void {
             $table->string('id')->primary();
             $table->string('user_id');
             $table->string('house_id');
+            $table->string('name')->nullable();
             $table->string('type');
             $table->string('target');
             $table->integer('lead_days')->default(0);
@@ -132,6 +150,7 @@ final class NotificationRepositoryTest extends TestCase
             $table->string('send_time');
             $table->timestamp('created_at')->nullable();
             $table->timestamp('updated_at')->nullable();
+            $table->softDeletes();
         });
     }
 }

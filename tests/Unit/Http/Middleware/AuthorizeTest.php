@@ -29,6 +29,7 @@ final class AuthorizeTest extends TestCase
 
         DB::schema()->create('houses', static function (Blueprint $table): void {
             $table->string('id');
+            $table->softDeletes();
         });
     }
 

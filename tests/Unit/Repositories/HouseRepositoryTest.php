@@ -36,6 +36,38 @@ final class HouseRepositoryTest extends TestCase
         self::assertSame('America/Los_Angeles', $house->timezone->getName());
     }
 
+    public function testDeleteHouse(): void
+    {
+        DB::table('houses')->insert([
+            ['id' => '1', 'user_id' => '1', 'name' => 'Example'],
+            ['id' => '2', 'user_id' => '1', 'name' => 'Keep'],
+        ]);
+        DB::table('bins')->insert([
+            ['id' => '1', 'house_id' => '1', 'name' => 'Rubbish'],
+            ['id' => '2', 'house_id' => '2', 'name' => 'Rubbish'],
+        ]);
+        DB::table('notifications')->insert([
+            ['id' => '1', 'house_id' => '1', 'name' => 'Morning text'],
+            ['id' => '2', 'house_id' => '2', 'name' => 'Morning text'],
+        ]);
+
+        new HouseRepository()->deleteHouse(new House()->newQuery()->findOrFail('1'));
+
+        self::assertSame(['2'], new House()->newQuery()->pluck('id')->all());
+        self::assertNotNull(DB::table('houses')->where('id', '1')->value('deleted_at'));
+        self::assertSame('1-Example', DB::table('houses')->where('id', '1')->value('name'));
+        self::assertSame('Keep', DB::table('houses')->where('id', '2')->value('name'));
+        self::assertNull(DB::table('houses')->where('id', '2')->value('deleted_at'));
+        self::assertNotNull(DB::table('bins')->where('id', '1')->value('deleted_at'));
+        self::assertSame('1-Rubbish', DB::table('bins')->where('id', '1')->value('name'));
+        self::assertSame('Rubbish', DB::table('bins')->where('id', '2')->value('name'));
+        self::assertNull(DB::table('bins')->where('id', '2')->value('deleted_at'));
+        self::assertNotNull(DB::table('notifications')->where('id', '1')->value('deleted_at'));
+        self::assertSame('1-Morning text', DB::table('notifications')->where('id', '1')->value('name'));
+        self::assertSame('Morning text', DB::table('notifications')->where('id', '2')->value('name'));
+        self::assertNull(DB::table('notifications')->where('id', '2')->value('deleted_at'));
+    }
+
     public function testGetHousesForUser(): void
     {
         DB::table('users')->insert([
@@ -84,6 +116,23 @@ final class HouseRepositoryTest extends TestCase
             $table->string('timezone')->nullable();
             $table->timestamp('created_at')->nullable();
             $table->timestamp('updated_at')->nullable();
+            $table->softDeletes();
+        });
+
+        DB::schema()->create('bins', static function (Blueprint $table): void {
+            $table->string('id');
+            $table->string('house_id');
+            $table->string('name')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        DB::schema()->create('notifications', static function (Blueprint $table): void {
+            $table->string('id');
+            $table->string('house_id');
+            $table->string('name')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 }

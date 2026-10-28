@@ -21,10 +21,28 @@ final class HousePolicyTest extends TestCase
         $this->bootEloquent()->migrate();
     }
 
-    public function testCreatePassesWithNoHouseAttached(): void
+    public function testCreateDoesNotCountOtherUsersHouses(): void
     {
-        $user = new User();
-        self::assertTrue(new HousePolicy()->create($user)->allowed());
+        DB::table('users')->insert([['id' => '1'], ['id' => '2']]);
+        DB::table('houses')->insert([['user_id' => '2'], ['user_id' => '2'], ['user_id' => '1']]);
+
+        $user = User::query()->findOrFail('1');
+        self::assertTrue(new HousePolicy($this->planRepository(houses: 2))->create($user)->allowed());
+
+        DB::table('houses')->insert(['user_id' => '1']);
+
+        self::assertFalse(new HousePolicy($this->planRepository(houses: 2))->create($user)->allowed());
+    }
+
+    public function testCreateFailsAtTheLimitOfOne(): void
+    {
+        DB::table('users')->insert(['id' => '1']);
+        DB::table('houses')->insert(['user_id' => '1']);
+
+        $response = new HousePolicy($this->planRepository(houses: 1))->create(User::query()->findOrFail('1'));
+
+        self::assertFalse($response->allowed());
+        self::assertSame('Your plan allows 1 house.', $response->message());
     }
 
     public function testCreateFailsAtThePlanLimit(): void
@@ -38,19 +56,6 @@ final class HousePolicyTest extends TestCase
         self::assertSame('Your plan allows 3 houses.', $response->message());
     }
 
-    public function testCreateCountsOnlyTheUsersOwnHousesAgainstTheLimit(): void
-    {
-        DB::table('users')->insert([['id' => '1'], ['id' => '2']]);
-        DB::table('houses')->insert([['user_id' => '2'], ['user_id' => '2'], ['user_id' => '1']]);
-
-        $user = User::query()->findOrFail('1');
-        self::assertTrue(new HousePolicy($this->planRepository(houses: 2))->create($user)->allowed());
-
-        DB::table('houses')->insert(['user_id' => '1']);
-
-        self::assertFalse(new HousePolicy($this->planRepository(houses: 2))->create($user)->allowed());
-    }
-
     public function testCreateLooksUpTheLimitsForTheUsersPlan(): void
     {
         DB::table('users')->insert(['id' => '1', 'plan' => Plan::PLUS->value]);
@@ -61,28 +66,68 @@ final class HousePolicyTest extends TestCase
         new HousePolicy($repository)->create(User::query()->findOrFail('1'));
     }
 
+    public function testCreatePassesUnderThePlanLimit(): void
+    {
+        self::assertTrue(new HousePolicy($this->planRepository(houses: 1))->create(new User())->allowed());
+    }
+
+    public function testCreatePassesWithAnUnlimitedPlan(): void
+    {
+        DB::table('users')->insert(['id' => '1']);
+        DB::table('houses')->insert([['user_id' => '1'], ['user_id' => '1']]);
+
+        $response = new HousePolicy($this->planRepository(houses: PlanLimits::UNLIMITED))->create(User::query()->findOrFail('1'));
+
+        self::assertTrue($response->allowed());
+    }
+
+    public function testDeleteFailsWithOtherUsersHouse(): void
+    {
+        $house = new House()->setAttribute('user_id', '2');
+        $user = new User()->setAttribute('id', '1');
+
+        $response = new HousePolicy()->delete($user, $house);
+
+        self::assertFalse($response->allowed());
+        self::assertSame(404, $response->status());
+    }
+
+    public function testDeletePassesWithUserOwnedHouse(): void
+    {
+        $house = new House()->setAttribute('user_id', '1');
+        $user = new User()->setAttribute('id', '1');
+
+        self::assertTrue(new HousePolicy()->delete($user, $house)->allowed());
+    }
+
+    public function testDeletePassesWithUserOwnedHouseEvenWhenOverThePlanLimit(): void
+    {
+        DB::table('users')->insert(['id' => '1']);
+        DB::table('houses')->insert([['user_id' => '1'], ['user_id' => '1']]);
+
+        $house = new House()->setAttribute('user_id', '1');
+        $user = User::query()->findOrFail('1');
+
+        self::assertTrue(new HousePolicy($this->planRepository(houses: 1))->delete($user, $house)->allowed());
+    }
+
+    public function testUpdateFailsWithOtherUsersHouse(): void
+    {
+        $house = new House()->setAttribute('user_id', '2');
+        $user = new User()->setAttribute('id', '1');
+
+        $response = new HousePolicy()->update($user, $house);
+
+        self::assertFalse($response->allowed());
+        self::assertSame(404, $response->status());
+    }
+
     public function testUpdatePassesWithUserOwnedHouse(): void
     {
         $house = new House()->setAttribute('user_id', '1');
         $user = new User()->setAttribute('id', '1');
 
         self::assertTrue(new HousePolicy()->update($user, $house)->allowed());
-    }
-
-    public function testUpdateFailsWithOtherHouse(): void
-    {
-        $house = new House()->setAttribute('user_id', '2');
-        $user = new User()->setAttribute('id', '1');
-
-        self::assertFalse(new HousePolicy()->update($user, $house)->allowed());
-    }
-
-    private function planRepository(int $houses): PlanRepositoryInterface
-    {
-        $repository = $this->createStub(PlanRepositoryInterface::class);
-        $repository->method('getLimits')->willReturn(new PlanLimits($houses, 1, 1, []));
-
-        return $repository;
     }
 
     private function migrate(): void
@@ -94,6 +139,15 @@ final class HousePolicyTest extends TestCase
 
         DB::schema()->create('houses', static function (Blueprint $table): void {
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
+            $table->softDeletes();
         });
+    }
+
+    private function planRepository(int $houses): PlanRepositoryInterface
+    {
+        $repository = $this->createStub(PlanRepositoryInterface::class);
+        $repository->method('getLimits')->willReturn(new PlanLimits($houses, 1, 1, []));
+
+        return $repository;
     }
 }

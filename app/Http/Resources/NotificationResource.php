@@ -20,6 +20,7 @@ final class NotificationResource extends JsonResource
             'active' => $this->getActiveEntities($request)->isNotificationActive($this->resource),
             'id' => $this->resource->getKey(),
             'lead_days' => $this->resource->leadDays,
+            'name' => $this->resource->name,
             'send_time' => $this->resource->sendTime,
             'target' => $this->resource->target,
             'type' => $this->resource->type->value,

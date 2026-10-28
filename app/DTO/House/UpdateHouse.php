@@ -10,13 +10,14 @@ use DateTimeZone;
 
 final readonly class UpdateHouse
 {
-    /** @param array<string, mixed> $values */
+    /** @param array{bin_night?: DayOfWeek, name?: string, timezone?: DateTimeZone} $values */
     public function __construct(private array $values)
     {
     }
 
     public static function fromRequest(UpdateHouseRequest $request): self
     {
+        /** @var array{bin_night?: string, name?: string, timezone?: string} $validated */
         $validated = $request->validated();
 
         $values = [];

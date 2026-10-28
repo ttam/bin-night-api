@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Auth\AuthenticatedUser;
-use App\Enums\NotificationType;
 use App\Models\Bin;
 use App\Models\House;
 use App\Models\Notification;
@@ -25,6 +24,7 @@ final readonly class ActiveEntityRepository implements ActiveEntityRepositoryInt
     public function getActiveEntitiesForUser(AuthenticatedUser $user): ActiveEntities
     {
         $owner = User::query()->where('external_id', '=', $user->id)->firstOrFail();
+        /** @var string $userId */
         $userId = $owner->getKey();
         $planLimits = $this->planRepository->getLimits($owner->plan);
 
@@ -49,6 +49,7 @@ final readonly class ActiveEntityRepository implements ActiveEntityRepositoryInt
             ->orderBy('id')
             ->get(['id']);
 
+        /** @var list<string> */
         return PlanLimits::within($houseQuery, $planLimits->houses)->pluck('id')->all();
     }
 
@@ -80,24 +81,25 @@ final readonly class ActiveEntityRepository implements ActiveEntityRepositoryInt
             ->orderBy('created_at')
             ->orderBy('id')
             ->get(['id', 'house_id', 'type'])
-            ->filter(static fn (Notification $notification): bool => ($type = NotificationType::tryFrom(
-                $notification->getAttribute('type'),
-            )) !== null && $planLimits->allowsNotificationType($type));
+            ->filter(static fn (Notification $notification): bool => $planLimits->allowsNotificationType($notification->type));
 
         return $this->activeInActiveHouses($notificationQuery, $houses, $planLimits->notificationsPerHouse);
     }
 
     /**
-     * @param \Illuminate\Support\Collection<int, \App\Models\Bin|\App\Models\Notification> $items oldest first
+     * @template TItem of \App\Models\Bin|\App\Models\Notification
+     *
+     * @param \Illuminate\Support\Collection<int, TItem> $items oldest first
      * @param list<string> $activeHouseIds
      *
      * @return list<string>
      */
     private function activeInActiveHouses(Collection $items, array $activeHouseIds, int $limitPerHouse): array
     {
+        /** @var list<string> */
         return $items
-            ->filter(static fn ($item): bool => \in_array($item->getAttribute('house_id'), $activeHouseIds, true))
-            ->groupBy(static fn ($item): string => $item->getAttribute('house_id'))
+            ->filter(static fn ($item): bool => \in_array($item->houseId, $activeHouseIds, true))
+            ->groupBy(static fn ($item): string => $item->houseId)
             ->flatMap(static fn (Collection $group): Collection => PlanLimits::within($group, $limitPerHouse))
             ->pluck('id')
             ->all();

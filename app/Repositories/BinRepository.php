@@ -27,11 +27,11 @@ final readonly class BinRepository implements BinRepositoryInterface
             'cycle' => $data->cycle->value,
             'lid_color' => $data->lidColor,
             'name' => $data->name,
-        ])
-            ->setAttribute('house_id', $data->houseId)
-            ->setAttribute('start_date', new DateTimeImmutable('today', new DateTimeZone('UTC')))
-            ->setAttribute('user_id', $userId);
+        ]);
 
+        $bin->setAttribute('house_id', $data->houseId);
+        $bin->setAttribute('start_date', new DateTimeImmutable('today', new DateTimeZone('UTC')));
+        $bin->setAttribute('user_id', $userId);
         $bin->save();
 
         return $bin;

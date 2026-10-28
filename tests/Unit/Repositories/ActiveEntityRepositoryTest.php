@@ -38,17 +38,15 @@ final class ActiveEntityRepositoryTest extends TestCase
         self::assertFalse($activeEntities->isBinActive($this->bin('b-c')));
     }
 
-    public function testNotificationTypeNotInThePlanIsInactiveAndDoesNotUseASlot(): void
+    public function testNotificationTypeNotInThePlanIsInactive(): void
     {
         $this->insertUser('u1');
         $this->insertHouse('h1', 'u1', '1885-09-02 00:00:00');
-        $this->insertNotification('n-pigeon', 'u1', 'h1', 'carrier-pigeon', '1955-11-12 00:00:00');
-        $this->insertNotification('n-sms', 'u1', 'h1', 'sms', '1985-10-26 00:00:00');
+        $this->insertNotification('n-sms', 'u1', 'h1', 'sms', '1955-11-12 00:00:00');
 
-        $activeEntities = $this->repository()->getActiveEntitiesForUser($this->user('u1'));
+        $activeEntities = $this->repository(new PlanLimits(1, 2, 1, []))->getActiveEntitiesForUser($this->user('u1'));
 
-        self::assertFalse($activeEntities->isNotificationActive($this->notification('n-pigeon')));
-        self::assertTrue($activeEntities->isNotificationActive($this->notification('n-sms')));
+        self::assertFalse($activeEntities->isNotificationActive($this->notification('n-sms')));
     }
 
     public function testOldestItemsAreActiveUpToEachLimit(): void

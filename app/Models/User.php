@@ -27,16 +27,19 @@ class User extends Authenticatable
         get => $this->getAttribute('plan') ?? Plan::FREE;
     }
 
+    /** @return HasMany<Bin, $this> */
     public function bins(): HasMany
     {
         return $this->hasMany(Bin::class);
     }
 
+    /** @return HasMany<House, $this> */
     public function houses(): HasMany
     {
         return $this->hasMany(House::class);
     }
 
+    /** @return HasMany<Notification, $this> */
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class);

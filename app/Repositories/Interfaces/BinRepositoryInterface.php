@@ -16,10 +16,10 @@ interface BinRepositoryInterface
 {
     public function createBin(AuthenticatedUser $authenticatedUser, CreateBin $data): Bin;
 
-    /** @return \Illuminate\Support\Collection<\App\Models\Bin> */
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Bin> */
     public function getBinsForNotification(Notification $notification, DateTimeImmutable $now): Collection;
 
-    /** @return \Illuminate\Support\Collection<\App\Models\Bin> */
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Bin> */
     public function getBinsForUser(AuthenticatedUser $user): Collection;
 
     public function updateBin(Bin $bin, UpdateBin $data): Bin;

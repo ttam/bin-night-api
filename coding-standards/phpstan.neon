@@ -1,0 +1,24 @@
+includes:
+    - ../vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+
+    paths:
+        - ../app
+
+    # Stricter than the level alone gives.
+    checkBenevolentUnionTypes: true
+    checkImplicitMixed: true
+    checkMissingCallableSignature: true
+    checkTooWideReturnTypesInProtectedAndPublicMethods: true
+    checkUninitializedProperties: true
+    reportAlwaysTrueInLastCondition: true
+
+    ignoreErrors:
+        # The property hooks on the models read their attributes with getAttribute() and getRelationValue(), which
+        # Eloquent types as mixed. PHP's own return types on the hooks check the value at runtime.
+        -
+            message: '#^Get hook for property .+ should return .+ but returns mixed\.$#'
+            identifier: return.type
+            path: ../app/Models

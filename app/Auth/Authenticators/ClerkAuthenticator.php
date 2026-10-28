@@ -17,6 +17,7 @@ use UnexpectedValueException;
 
 final readonly class ClerkAuthenticator implements TokenAuthenticatorInterface
 {
+    /** @param array<mixed> $authorizedParties */
     public function __construct(
         private string $jwksUrl,
         private array $authorizedParties,
@@ -31,6 +32,7 @@ final readonly class ClerkAuthenticator implements TokenAuthenticatorInterface
             $keySet = new CachedKeySet($this->jwksUrl, $this->httpClient, new HttpFactory(), $this->cache, null, true);
 
             $decoded = JWT::decode($token, $keySet);
+            /** @var array<string, mixed> $claims */
             $claims = \json_decode(\json_encode($decoded, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
 
             $this->validateAuthorizedParty($claims['azp'] ?? null);
@@ -43,7 +45,7 @@ final readonly class ClerkAuthenticator implements TokenAuthenticatorInterface
         }
     }
 
-    private function validateAuthorizedParty(?string $azp): void
+    private function validateAuthorizedParty(mixed $azp): void
     {
         if ($azp === null) {
             return;

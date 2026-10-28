@@ -22,7 +22,7 @@ final readonly class CreateBin
     {
         return new self(
             \ltrim($request->string('bin_color')->toString(), '#'),
-            Cycle::from($request->input('cycle')),
+            Cycle::from($request->string('cycle')->toString()),
             $request->string('house_id')->toString(),
             \ltrim($request->string('lid_color')->toString(), '#'),
             $request->string('name')->toString(),

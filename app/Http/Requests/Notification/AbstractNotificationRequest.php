@@ -24,6 +24,7 @@ abstract class AbstractNotificationRequest extends FormRequest
         return $this->getTargetFormat()['messages'];
     }
 
+    /** @return array<string, array<mixed>> */
     public function rules(): array
     {
         return [

@@ -49,6 +49,7 @@ final readonly class ScheduledBinRepository implements BinRepositoryInterface
 
     private function withNextBinNight(Bin $bin): Bin
     {
+        /** @var Bin */
         return $bin->setAttribute(
             'computed_next_bin_night',
             $this->schedule->computeNextBinNight($bin, $this->clock->now()),

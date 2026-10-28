@@ -20,9 +20,9 @@ final readonly class CreateHouse
     public static function fromRequest(CreateHouseRequest $request): self
     {
         return new self(
-            DayOfWeek::from($request->input('bin_night')),
+            DayOfWeek::from($request->string('bin_night')->toString()),
             $request->string('name')->toString(),
-            new DateTimeZone($request->input('timezone')),
+            new DateTimeZone($request->string('timezone')->toString()),
         );
     }
 }

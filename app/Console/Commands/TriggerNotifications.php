@@ -40,15 +40,16 @@ class TriggerNotifications extends Command
         NotificationRepositoryInterface $notificationRepository,
     ): int {
         $dryRun = \boolval($this->option('dry'));
-        $now = $this->argument('now');
+        $now = \is_string($argument = $this->argument('now')) ? $argument : null;
 
-        // If $now is not an ISO-8601 string, return an error
-        if ($now && (\is_string($now) === false || \preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $now) === 0)) {
+        $time = $now === null ? $clock->now()->setTimezone(new DateTimeZone('UTC')) : $this->parseDate($now);
+
+        if ($time === null) {
             $this->error(\sprintf('Invalid date format "%s"', $now));
             return self::EXIT_CODE_BAD_INPUT;
         }
 
-        $dateTime = $this->getDateTime($now ?? $clock->now()->format('Y-m-d H:i'));
+        $dateTime = $this->floorToSlot($time);
 
         $notifications = $notificationRepository->getDueNotifications($dateTime);
 
@@ -77,7 +78,7 @@ class TriggerNotifications extends Command
                     '<fg=yellow>[DRY] Would dispatch NotificationEvent for notification "%s" with %d bins (%s)</>',
                     $notification->target,
                     \count($bins),
-                    \implode(', ', $bins->pluck('name')->toArray()),
+                    \implode(', ', $bins->map(static fn (Bin $bin): string => $bin->name)->all()),
                 ));
                 continue;
             }
@@ -90,15 +91,26 @@ class TriggerNotifications extends Command
     }
 
     /**
-     * Set the dateTime property to the current time (or provided time) rounded down to the
-     * nearest 30 minutes. This allows for slight variations in the cron execution time.
+     * Rounds a time down to the start of its half hour. The schedule runs every 30 minutes, but cron can start a little
+     * late (11:31 rather than 11:30), and notifications are matched against their send time exactly, so without this
+     * the 11:30 notifications would be missed.
      */
-    private function getDateTime(string $dateTime): DateTimeImmutable
+    private function floorToSlot(DateTimeImmutable $time): DateTimeImmutable
     {
-        $currentTime = DateTimeImmutable::createFromFormat('Y-m-d H:i', $dateTime, new DateTimeZone('UTC'));
-        $hours = \intval($currentTime->format('H'));
-        $minutes = \intval($currentTime->format('i'));
+        return $time->setTime(
+            \intval($time->format('H')),
+            \intdiv(\intval($time->format('i')), 30) * 30,
+        );
+    }
 
-        return $currentTime->setTime($hours, \intval(\floor($minutes / 30) * 30), 0);
+    /** Reads the `now` argument as a UTC time, or returns null if it is not a real date and time in `Y-m-d H:i` form. */
+    private function parseDate(string $input): ?DateTimeImmutable
+    {
+        $time = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $input, new DateTimeZone('UTC'));
+
+        // createFromFormat() rolls impossible dates over (31 February becomes 3 March). This command sends real
+        // messages, so running the wrong day's slot silently is worse than refusing: the input has to read back exactly
+        // as it was given.
+        return $time !== false && $time->format('Y-m-d H:i') === $input ? $time : null;
     }
 }

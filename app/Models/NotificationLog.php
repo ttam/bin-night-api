@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class NotificationLog extends Model
 {
+    /** @return BelongsTo<Notification, $this> */
     public function notification(): BelongsTo
     {
         return $this->belongsTo(Notification::class);

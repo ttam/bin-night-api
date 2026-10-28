@@ -20,7 +20,7 @@ final readonly class BinPolicy extends AbstractPolicy
      */
     public function create(User $user, ?House $house): Response
     {
-        if ($house?->userId !== $user->getKey()) {
+        if ($house === null || $house->userId !== $user->getKey()) {
             return Response::denyAsNotFound();
         }
 

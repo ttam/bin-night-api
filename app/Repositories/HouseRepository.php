@@ -18,6 +18,7 @@ final readonly class HouseRepository implements HouseRepositoryInterface
     {
         $userId = User::query()->where('external_id', $authenticatedUser->id)->value('id');
 
+        /** @var House $house */
         $house = new House()->fill([
             'bin_night' => $data->binNight->value,
             'name' => $data->name,

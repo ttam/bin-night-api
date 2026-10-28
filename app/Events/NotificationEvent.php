@@ -12,6 +12,7 @@ final readonly class NotificationEvent
 {
     use Dispatchable;
 
+    /** @param \Illuminate\Support\Collection<int, \App\Models\Bin> $bins */
     public function __construct(public Notification $notification, public Collection $bins)
     {
         //

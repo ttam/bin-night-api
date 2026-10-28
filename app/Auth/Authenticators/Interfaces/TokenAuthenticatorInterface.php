@@ -8,5 +8,5 @@ use App\Auth\AuthenticatedUser;
 
 interface TokenAuthenticatorInterface
 {
-    public function authenticate(string $token): ?AuthenticatedUser;
+    public function authenticate(string $token): AuthenticatedUser;
 }

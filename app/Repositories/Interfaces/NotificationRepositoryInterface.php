@@ -15,10 +15,10 @@ interface NotificationRepositoryInterface
 {
     public function createNotification(AuthenticatedUser $authenticatedUser, CreateNotification $data): Notification;
 
-    /** @return \Illuminate\Support\Collection<\App\Models\Notification> */
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Notification> */
     public function getDueNotifications(DateTimeInterface $dateTime): Collection;
 
-    /** @return \Illuminate\Support\Collection<\App\Models\Notification> */
+    /** @return \Illuminate\Support\Collection<int, \App\Models\Notification> */
     public function getNotificationsForUser(AuthenticatedUser $user): Collection;
 
     public function updateNotification(Notification $notification, UpdateNotification $data): Notification;

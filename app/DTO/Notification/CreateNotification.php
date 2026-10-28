@@ -25,7 +25,7 @@ final readonly class CreateNotification
             $request->integer('lead_days'),
             $request->string('send_time')->toString(),
             $request->string('target')->toString(),
-            NotificationType::from($request->input('type')),
+            NotificationType::from($request->string('type')->toString()),
         );
     }
 }

@@ -14,6 +14,7 @@ final class BinResource extends JsonResource
 {
     use HasActiveEntities;
 
+    /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         $active = $this->getActiveEntities($request)->isBinActive($this->resource);

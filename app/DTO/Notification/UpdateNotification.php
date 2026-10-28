@@ -9,13 +9,14 @@ use App\Http\Requests\Notification\UpdateNotificationRequest;
 
 final readonly class UpdateNotification
 {
-    /** @param array<string, mixed> $values */
+    /** @param array{lead_days?: int, send_time?: string, target?: string, type?: NotificationType} $values */
     public function __construct(private array $values)
     {
     }
 
     public static function fromRequest(UpdateNotificationRequest $request): self
     {
+        /** @var array{lead_days?: int|string, send_time?: string, target?: string, type?: string} $validated */
         $validated = $request->validated();
 
         $values = [];

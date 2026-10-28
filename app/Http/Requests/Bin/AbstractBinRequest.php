@@ -19,6 +19,7 @@ abstract class AbstractBinRequest extends FormRequest
         return true;
     }
 
+    /** @return array<string, array<mixed>> */
     public function rules(): array
     {
         return [

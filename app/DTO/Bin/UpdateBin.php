@@ -9,13 +9,14 @@ use App\Http\Requests\Bin\UpdateBinRequest;
 
 final readonly class UpdateBin
 {
-    /** @param array<string, mixed> $values */
+    /** @param array{bin_color?: string, cycle?: Cycle, lid_color?: string, name?: string} $values */
     public function __construct(private array $values)
     {
     }
 
     public static function fromRequest(UpdateBinRequest $request): self
     {
+        /** @var array{bin_color?: string, cycle?: string, lid_color?: string, name?: string} $validated */
         $validated = $request->validated();
 
         $values = [];

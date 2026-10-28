@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Middleware;
 
+use App\Auth\AuthenticatedUser;
 use App\Enums\NotificationType;
 use App\Http\Middleware\Authorize;
 use App\Models\Bin;
@@ -61,7 +62,7 @@ final class AuthorizeTest extends TestCase
         $repository = $this->createStub(UserRepositoryInterface::class);
         $repository->method('getUserFromExternalId')->willReturn($user);
 
-        $request = Request::create('/')->setUserResolver(static fn (): User => $user);
+        $request = Request::create('/')->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));
 
         $models = [$modelName];
         new Authorize($gate, $repository)->handle(
@@ -125,7 +126,7 @@ final class AuthorizeTest extends TestCase
         $repository = $this->createStub(UserRepositoryInterface::class);
         $repository->method('getUserFromExternalId')->willReturn($user);
 
-        $request = Request::create('/', 'POST', $input)->setUserResolver(static fn (): User => $user);
+        $request = Request::create('/', 'POST', $input)->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));
 
         new Authorize($gate, $repository)->handle(
             $request,

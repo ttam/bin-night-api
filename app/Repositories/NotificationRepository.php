@@ -24,10 +24,10 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
             'send_time' => $data->sendTime,
             'target' => $data->target,
             'type' => $data->type->value,
-        ])
-            ->setAttribute('house_id', $data->houseId)
-            ->setAttribute('user_id', $userId);
+        ]);
 
+        $notification->setAttribute('house_id', $data->houseId);
+        $notification->setAttribute('user_id', $userId);
         $notification->save();
 
         return $notification;

@@ -12,6 +12,7 @@ final class CreateNotificationRequest extends AbstractNotificationRequest
         }
     }
 
+    /** @return array<string, array<mixed>> */
     public function rules(): array
     {
         return [

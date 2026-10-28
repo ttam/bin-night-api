@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\Cycle;
+use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,6 +34,10 @@ final class Bin extends Model
         get => $this->getRelationValue('house');
     }
 
+    public string $houseId {
+        get => $this->getAttribute('house_id');
+    }
+
     public string $lidColor {
         get => $this->getAttribute('lid_color');
     }
@@ -45,15 +50,17 @@ final class Bin extends Model
         get => $this->getAttribute('week_of_month');
     }
 
-    public DateTimeInterface $startDate {
+    public DateTimeImmutable $startDate {
         get => $this->getAttribute('start_date');
     }
 
+    /** @return BelongsTo<House, $this> */
     public function house(): BelongsTo
     {
         return $this->belongsTo(House::class);
     }
 
+    /** @return HasMany<Notification, $this> */
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class);
@@ -63,7 +70,7 @@ final class Bin extends Model
     {
         return [
             'cycle' => Cycle::class,
-            'start_date' => 'datetime',
+            'start_date' => 'immutable_datetime',
         ];
     }
 }

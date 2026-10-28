@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Houses;
 
+use App\Auth\AuthenticatedUser;
 use App\Http\Resources\HouseResource;
 use App\Repositories\Interfaces\HouseRepositoryInterface;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ class ListController
     public function __invoke(Request $request, HouseRepositoryInterface $repository): AnonymousResourceCollection
     {
         return new AnonymousResourceCollection(
-            $repository->getHousesForUser($request->user()),
+            $repository->getHousesForUser(AuthenticatedUser::fromRequest($request)),
             HouseResource::class,
         );
     }

@@ -20,9 +20,11 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3",
         "laravel/pail": "^1.2.5",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^12.5.12",
         "symplify/easy-coding-standard": "^13.0"
     },
@@ -73,9 +75,23 @@
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
         ],
+        "check": [
+            "@composer validate --strict --no-check-publish",
+            "@standards-check",
+            "@phpstan",
+            "@coverage-check"
+        ],
         "coverage": [
             "@putenv XDEBUG_MODE=coverage",
             "./vendor/bin/phpunit --coverage-html coverage"
+        ],
+        "coverage-check": [
+            "@putenv XDEBUG_MODE=coverage",
+            "./vendor/bin/phpunit --coverage-clover coverage/clover.xml --fail-on-all-issues",
+            "@php coding-standards/coverage.php coverage/clover.xml"
+        ],
+        "phpstan": [
+            "./vendor/bin/phpstan analyze --configuration coding-standards/phpstan.neon --ansi --no-progress --memory-limit 1G"
         ],
         "standards": [
             "./vendor/bin/ecs check --config coding-standards/ecs.php --fix"

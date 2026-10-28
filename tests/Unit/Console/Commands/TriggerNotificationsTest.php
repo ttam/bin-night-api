@@ -42,6 +42,26 @@ final class TriggerNotificationsTest extends TestCase
             new KnownClock(new DateTimeImmutable('1985-10-26 01:21', new DateTimeZone('UTC'))),
             null,
         ];
+
+        yield 'Using a clock in another timezone' => [
+            new KnownClock(new DateTimeImmutable('1985-10-26 12:21', new DateTimeZone('+11:00'))),
+            null,
+        ];
+    }
+
+    public static function getInvalidNows(): iterable
+    {
+        yield 'Not a date' => ['example'];
+
+        yield 'Empty' => [''];
+
+        yield 'Wrong format' => ['1985-10-26T01:21'];
+
+        yield 'Impossible day' => ['2026-02-31 02:30'];
+
+        yield 'Impossible hour' => ['1985-10-26 25:00'];
+
+        yield 'Impossible minute' => ['1985-10-26 01:99'];
     }
 
     public function testActiveEntitiesAreLoadedOncePerUser(): void
@@ -215,9 +235,10 @@ final class TriggerNotificationsTest extends TestCase
     }
 
     /** @noinspection PhpUnhandledExceptionInspection */
-    public function testInvalidNowReturnsInputOutputError(): void
+    #[DataProvider('getInvalidNows')]
+    public function testInvalidNowReturnsInputOutputError(string $now): void
     {
-        $exitCode = $this->makeCommand('example', [])->handle(
+        $exitCode = $this->makeCommand($now, [])->handle(
             $this->makeExceptionStub(ActiveEntityRepositoryInterface::class, 'getActiveEntitiesForUser'),
             $this->makeExceptionStub(BinRepositoryInterface::class, 'getBinsForNotification'),
             $this->makeExceptionStub(ClockInterface::class, 'now'),
@@ -226,7 +247,7 @@ final class TriggerNotificationsTest extends TestCase
         );
 
         self::assertSame(5, $exitCode);
-        self::assertSame(['Invalid date format "example"'], $this->errors);
+        self::assertSame([\sprintf('Invalid date format "%s"', $now)], $this->errors);
     }
 
     public function testNothingIsSentWhenEveryBinIsInactive(): void

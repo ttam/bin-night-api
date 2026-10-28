@@ -51,6 +51,7 @@ final class ScheduleService implements ScheduleServiceInterface
             ->setTimezone($date->getTimezone())
             ->setTime(12, 0);
 
+        /** @var int $days */
         $days = $startDate->diff($date)->days;
         $weeks = \intdiv($days, 7);
 

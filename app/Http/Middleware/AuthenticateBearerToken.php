@@ -21,6 +21,7 @@ final readonly class AuthenticateBearerToken
     {
     }
 
+    /** @param \Closure(\Illuminate\Http\Request): \Symfony\Component\HttpFoundation\Response $next */
     public function handle(Request $request, Closure $next): Response
     {
         $developmentUser = $this->config->get('authentication.clerk.development_user');

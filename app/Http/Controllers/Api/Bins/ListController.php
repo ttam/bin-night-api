@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Bins;
 
+use App\Auth\AuthenticatedUser;
 use App\Http\Resources\BinResource;
 use App\Repositories\Interfaces\BinRepositoryInterface;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ class ListController
     public function __invoke(Request $request, BinRepositoryInterface $repository): AnonymousResourceCollection
     {
         return new AnonymousResourceCollection(
-            $repository->getBinsForUser($request->user()),
+            $repository->getBinsForUser(AuthenticatedUser::fromRequest($request)),
             BinResource::class,
         );
     }

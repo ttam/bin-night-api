@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Notifications\Twilio;
 
 use App\Services\Notifications\Twilio\Interfaces\TwilioServiceInterface;
-use Illuminate\Contracts\Config\Repository;
+use Illuminate\Config\Repository;
 use Twilio\Exceptions\TwilioException;
 use Twilio\Rest\Client;
 
@@ -16,8 +16,8 @@ final readonly class TwilioService implements TwilioServiceInterface
     public function __construct(private Repository $config, ?Client $client = null)
     {
         $this->client = $client ?? new Client(
-            $config->get('services.twilio.sid'),
-            $config->get('services.twilio.secret'),
+            $config->string('services.twilio.sid'),
+            $config->string('services.twilio.secret'),
         );
     }
 

@@ -24,7 +24,7 @@ final readonly class NotificationPolicy extends AbstractPolicy
      */
     public function create(User $user, ?House $house, mixed $type = null): Response
     {
-        if ($house?->userId !== $user->getKey()) {
+        if ($house === null || $house->userId !== $user->getKey()) {
             return Response::denyAsNotFound();
         }
 

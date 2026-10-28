@@ -16,6 +16,10 @@ final class Notification extends Model
         get => $this->getRelationValue('house');
     }
 
+    public string $houseId {
+        get => $this->getAttribute('house_id');
+    }
+
     public ?int $leadDays {
         get => $this->getAttribute('lead_days');
     }
@@ -34,19 +38,27 @@ final class Notification extends Model
     }
 
     public NotificationType $type {
-        get => NotificationType::from($this->getAttribute('type'));
+        get {
+            /** @var string $type */
+            $type = $this->getAttribute('type');
+
+            return NotificationType::from($type);
+        }
     }
 
+    /** @return BelongsTo<Bin, $this> */
     public function bin(): BelongsTo
     {
         return $this->belongsTo(Bin::class);
     }
 
+    /** @return BelongsTo<House, $this> */
     public function house(): BelongsTo
     {
         return $this->belongsTo(House::class);
     }
 
+    /** @return HasMany<NotificationLog, $this> */
     public function logs(): HasMany
     {
         return $this->hasMany(NotificationLog::class);

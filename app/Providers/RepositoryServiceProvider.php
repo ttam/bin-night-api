@@ -18,6 +18,7 @@ use App\Repositories\PlanRepository;
 use App\Repositories\ScheduledBinRepository;
 use App\Repositories\UserRepository;
 use App\Services\Schedule\Interfaces\ScheduleServiceInterface;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Psr\Clock\ClockInterface;
 
@@ -26,7 +27,7 @@ final class RepositoryServiceProvider extends ServiceProvider
     /** @codeCoverageIgnore */
     public function register(): void
     {
-        $this->app->singleton(BinRepositoryInterface::class, static function ($app): BinRepositoryInterface {
+        $this->app->singleton(BinRepositoryInterface::class, static function (Application $app): BinRepositoryInterface {
             return new ScheduledBinRepository(
                 $app->make(BinRepository::class),
                 $app->make(ClockInterface::class),

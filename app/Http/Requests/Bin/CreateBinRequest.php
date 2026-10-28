@@ -14,10 +14,11 @@ final class CreateBinRequest extends AbstractBinRequest
         }
     }
 
+    /** @return array<string, array<mixed>> */
     public function rules(): array
     {
         $rules = parent::rules();
-        $rules['name'][] = Rule::unique('bins', 'name')->where('house_id', $this->input('house_id'));
+        $rules['name'][] = Rule::unique('bins', 'name')->where('house_id', $this->string('house_id')->toString());
 
         return [
             ...$rules,

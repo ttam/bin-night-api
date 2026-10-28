@@ -15,6 +15,7 @@ final class UpdateBinRequest extends AbstractBinRequest
         }
     }
 
+    /** @return array<string, array<mixed>> */
     public function rules(): array
     {
         $rules = parent::rules();
@@ -23,7 +24,7 @@ final class UpdateBinRequest extends AbstractBinRequest
 
         if ($bin instanceof Bin) {
             $rules['name'][] = Rule::unique('bins', 'name')
-                ->where('house_id', $bin->getAttribute('house_id'))
+                ->where('house_id', $bin->houseId)
                 ->ignore($bin);
         }
 

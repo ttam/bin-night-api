@@ -14,7 +14,7 @@ interface HouseRepositoryInterface
 {
     public function createHouse(AuthenticatedUser $authenticatedUser, CreateHouse $data): House;
 
-    /** @return \Illuminate\Support\Collection<\App\Models\House> */
+    /** @return \Illuminate\Support\Collection<int, \App\Models\House> */
     public function getHousesForUser(AuthenticatedUser $user): Collection;
 
     public function updateHouse(House $house, UpdateHouse $data): House;

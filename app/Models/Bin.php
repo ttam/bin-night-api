@@ -10,7 +10,6 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['bin_color', 'cycle', 'lid_color', 'name'])]
@@ -63,12 +62,6 @@ final class Bin extends Model
     public function house(): BelongsTo
     {
         return $this->belongsTo(House::class);
-    }
-
-    /** @return HasMany<Notification, $this> */
-    public function notifications(): HasMany
-    {
-        return $this->hasMany(Notification::class);
     }
 
     protected function casts(): array

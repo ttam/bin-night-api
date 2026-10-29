@@ -55,12 +55,6 @@ final class Notification extends Model
         get => $this->getAttribute('user_external_id');
     }
 
-    /** @return BelongsTo<Bin, $this> */
-    public function bin(): BelongsTo
-    {
-        return $this->belongsTo(Bin::class);
-    }
-
     /** @return BelongsTo<House, $this> */
     public function house(): BelongsTo
     {

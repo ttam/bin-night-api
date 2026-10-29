@@ -86,6 +86,36 @@ final class NotificationRepositoryTest extends TestCase
         self::assertSame('user_111', $results->first()->userExternalId);
     }
 
+    public function testGetDueNotificationsLeavesOutOnlySlotsThatWereSent(): void
+    {
+        DB::table('users')->insert(['id' => '1', 'external_id' => 'user_111']);
+        DB::table('houses')->insert(['id' => '1', 'timezone' => 'UTC']);
+
+        $due = ['user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '04aaaaaaaa', 'send_time' => '01:00'];
+        DB::table('notifications')->insert([
+            ['id' => 'sent', ...$due],
+            ['id' => 'failed', ...$due],
+            ['id' => 'processing', ...$due],
+            ['id' => 'sent-for-another-slot', ...$due],
+            ['id' => 'never-tried', ...$due],
+        ]);
+
+        DB::table('notification_logs')->insert([
+            ['id' => 'l1', 'notification_id' => 'sent', 'scheduled_for' => '1985-10-26 01:00:00', 'status' => 'sent'],
+            ['id' => 'l2', 'notification_id' => 'failed', 'scheduled_for' => '1985-10-26 01:00:00', 'status' => 'failed'],
+            ['id' => 'l3', 'notification_id' => 'processing', 'scheduled_for' => '1985-10-26 01:00:00', 'status' => 'processing'],
+            ['id' => 'l4', 'notification_id' => 'sent-for-another-slot', 'scheduled_for' => '1985-10-25 01:00:00', 'status' => 'sent'],
+        ]);
+
+        $results = new NotificationRepository()
+            ->getDueNotifications(new DateTimeImmutable('1985-10-26 01:00', new DateTimeZone('UTC')));
+
+        $ids = $results->pluck('id')->all();
+        \sort($ids);
+
+        self::assertSame(['failed', 'never-tried', 'processing', 'sent-for-another-slot'], $ids);
+    }
+
     public function testGetNotificationsForUser(): void
     {
         DB::table('users')->insert([
@@ -151,6 +181,13 @@ final class NotificationRepositoryTest extends TestCase
             $table->timestamp('created_at')->nullable();
             $table->timestamp('updated_at')->nullable();
             $table->softDeletes();
+        });
+
+        DB::schema()->create('notification_logs', static function (Blueprint $table): void {
+            $table->string('id')->primary();
+            $table->string('notification_id');
+            $table->dateTime('scheduled_for');
+            $table->string('status');
         });
     }
 }

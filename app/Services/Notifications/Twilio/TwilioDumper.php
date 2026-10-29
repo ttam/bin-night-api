@@ -9,9 +9,8 @@ use App\Services\Notifications\Twilio\Interfaces\TwilioServiceInterface;
 final readonly class TwilioDumper implements TwilioServiceInterface
 {
     /** @codeCoverageIgnore */
-    public function sendMessage(string $to, string $message): bool
+    public function sendMessage(string $to, string $message): void
     {
         \dump(\sprintf('Sending message "%s" to "%s"', $message, $to));
-        return true;
     }
 }

@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services\Notifications\Twilio;
 
+use App\Services\Notifications\Exceptions\DeliveryFailedException;
 use App\Services\Notifications\Twilio\TwilioService;
 use Illuminate\Config\Repository;
 use Mockery;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 use PHPUnit\Framework\TestCase;
-use Twilio\Exceptions\TwilioException;
+use Twilio\Exceptions\RestException;
 use Twilio\Rest\Api\V2010\Account\MessageInstance;
 use Twilio\Rest\Api\V2010\Account\MessageList;
 use Twilio\Rest\Client;
@@ -38,7 +39,7 @@ final class TwilioServiceTest extends TestCase
         ]);
     }
 
-    public function testSendMessageReturnsTrueOnSuccess(): void
+    public function testSendMessageSendsTheMessage(): void
     {
         $instance = Mockery::mock(MessageInstance::class);
 
@@ -51,17 +52,26 @@ final class TwilioServiceTest extends TestCase
         $client = Mockery::mock(Client::class);
         $client->messages = $messages;
 
-        self::assertTrue(new TwilioService($this->config, $client)->sendMessage('0400000000', 'example'));
+        new TwilioService($this->config, $client)->sendMessage('0400000000', 'example');
     }
 
-    public function testSendMessageReturnsFalseOnError(): void
+    public function testSendMessageThrowsAShortReasonOnError(): void
     {
+        $error = new RestException('The number +61400000000 is not valid', 21211, 400);
+
         $messages = Mockery::mock(MessageList::class);
-        $messages->shouldReceive('create')->once()->andThrow(new TwilioException('Exception'));
+        $messages->shouldReceive('create')->once()->andThrow($error);
 
         $client = Mockery::mock(Client::class);
         $client->messages = $messages;
 
-        self::assertFalse(new TwilioService($this->config, $client)->sendMessage('0400000000', 'example'));
+        try {
+            new TwilioService($this->config, $client)->sendMessage('+61400000000', 'example');
+            self::fail('Expected the failure to be thrown.');
+        } catch (DeliveryFailedException $e) {
+            // Only the class and Twilio's error code are kept: Twilio's own message can contain the phone number.
+            self::assertSame('Twilio\Exceptions\RestException (code 21211)', $e->getMessage());
+            self::assertSame($error, $e->getPrevious());
+        }
     }
 }

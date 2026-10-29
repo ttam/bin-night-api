@@ -30,7 +30,7 @@ return Application::configure(basePath: \dirname(__DIR__))
         ]);
     })
     ->withSchedule(static function (Schedule $schedule): void {
-        $schedule->command('bin-night:trigger-notifications')->everyThirtyMinutes();
+        $schedule->command('bin-night:trigger-notifications')->everyThirtyMinutes()->withoutOverlapping(25);
     })
     ->withExceptions(static function (Exceptions $exceptions): void {
         // Give plan-limit denials a stable code so clients can show an upgrade prompt rather than a bare 403.

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\NotificationType;
 use App\Models\Concerns\ReleasesNameOnDelete;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -48,6 +49,10 @@ final class Notification extends Model
 
             return NotificationType::from($type);
         }
+    }
+
+    public ?DateTimeInterface $updatedAt {
+        get => $this->getAttribute('updated_at');
     }
 
     /** Only present on notifications loaded by NotificationRepository::getDueNotifications(). */

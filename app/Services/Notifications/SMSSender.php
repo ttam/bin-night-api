@@ -16,8 +16,8 @@ final readonly class SMSSender implements NotificationSenderInterface
     }
 
     /** @inheritDoc */
-    public function send(string $target, Collection $bins): bool
+    public function send(string $target, Collection $bins): void
     {
-        return $this->service->sendMessage($target, $bins->map(static fn (Bin $bin): string => $bin->name)->join(', '));
+        $this->service->sendMessage($target, $bins->map(static fn (Bin $bin): string => $bin->name)->join(', '));
     }
 }

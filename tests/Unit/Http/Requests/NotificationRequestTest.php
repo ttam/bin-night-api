@@ -198,9 +198,38 @@ final class NotificationRequestTest extends TestCase
         );
     }
 
-    public function testMessagesAreEmptyWithoutAType(): void
+    public function testMessagesOnlyExplainTheSendTimeWithoutAType(): void
     {
-        self::assertSame([], new CreateNotificationRequest()->messages());
+        self::assertSame(
+            ['send_time.regex' => 'The send time must be on the hour or half hour, like 18:00 or 18:30.'],
+            new CreateNotificationRequest()->messages(),
+        );
+    }
+
+    #[DataProvider('getBadSendTimes')]
+    public function testSendTimeNotOnTheHalfHourIsExplained(string $sendTime): void
+    {
+        $request = new CreateNotificationRequest();
+        $validator = $this->getValidator(['send_time' => $sendTime], ['send_time' => $request->rules()['send_time']], $request->messages());
+
+        self::assertFalse($validator->passes());
+        self::assertCount(1, $validator->errors()->get('send_time'));
+    }
+
+    public function testSendTimeOffTheHalfHourGetsTheHalfHourMessage(): void
+    {
+        $request = new CreateNotificationRequest();
+        $validator = $this->getValidator(['send_time' => '18:15'], ['send_time' => $request->rules()['send_time']], $request->messages());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['The send time must be on the hour or half hour, like 18:00 or 18:30.'], $validator->errors()->get('send_time'));
+    }
+
+    public function testSendTimeOnTheHourAndHalfHourPasses(): void
+    {
+        foreach (['00:00', '07:30', '18:00', '23:30'] as $sendTime) {
+            self::assertTrue($this->validate(['send_time' => $sendTime])->passes(), $sendTime);
+        }
     }
 
     public function testUpdateRequestAllowsTheNotificationsOwnName(): void

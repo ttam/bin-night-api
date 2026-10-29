@@ -6,5 +6,6 @@ namespace App\Services\Notifications\Twilio\Interfaces;
 
 interface TwilioServiceInterface
 {
-    public function sendMessage(string $to, string $message): bool;
+    /** @throws \App\Services\Notifications\Exceptions\DeliveryFailedException */
+    public function sendMessage(string $to, string $message): void;
 }

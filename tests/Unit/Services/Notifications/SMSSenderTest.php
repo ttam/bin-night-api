@@ -18,7 +18,7 @@ final class SMSSenderTest extends TestCase
     public function testSendCallsService(): void
     {
         $service = \Mockery::mock(TwilioServiceInterface::class);
-        $service->shouldReceive('sendMessage')->once()->with('0400000000', 'Bin 1, Bin 2')->andReturnTrue();
+        $service->shouldReceive('sendMessage')->once()->with('0400000000', 'Bin 1, Bin 2');
 
         new SMSSender($service)->send('0400000000', new Collection([
             new Bin()->setAttribute('name', 'Bin 1'),

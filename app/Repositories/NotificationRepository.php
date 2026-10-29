@@ -7,10 +7,12 @@ namespace App\Repositories;
 use App\Auth\AuthenticatedUser;
 use App\DTO\Notification\CreateNotification;
 use App\DTO\Notification\UpdateNotification;
+use App\Enums\DeliveryStatus;
 use App\Models\Notification;
 use App\Models\User;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
 use DateTimeInterface;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 
 final readonly class NotificationRepository implements NotificationRepositoryInterface
@@ -52,6 +54,14 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
             ->join('houses', 'notifications.house_id', '=', 'houses.id')
             ->join('users', 'notifications.user_id', '=', 'users.id')
             ->whereRaw($condition, [$dateTime, $dateTime])
+            // A slot that has been sent is finished. One that failed, or is still processing, stays due so that a later
+            // run retries it or reports it.
+            ->whereNotExists(static fn (QueryBuilder $query): QueryBuilder => $query
+                ->selectRaw('1')
+                ->from('notification_logs')
+                ->whereColumn('notification_logs.notification_id', 'notifications.id')
+                ->where('notification_logs.scheduled_for', '=', $dateTime)
+                ->where('notification_logs.status', '=', DeliveryStatus::SENT->value))
             ->get();
     }
 

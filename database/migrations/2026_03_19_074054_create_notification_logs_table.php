@@ -16,12 +16,14 @@ return new class() extends Migration {
     {
         Schema::create('notification_logs', static function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('notification_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('bin_id')->constrained()->cascadeOnDelete();
-            $table->timestamp('sent_at');
-            $table->date('scheduled_for');
+            $table->foreignUuid('notification_id')->constrained()->cascadeOnDelete();
+            $table->dateTime('scheduled_for');
+            $table->string('status');
+            $table->timestamp('sent_at')->nullable();
+            $table->string('failure_reason')->nullable();
             $table->timestamps();
+
+            $table->unique(['notification_id', 'scheduled_for']);
         });
     }
 };

@@ -1,0 +1,234 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Console;
+
+use App\Services\Clock\KnownClock;
+use App\Services\Notifications\Exceptions\DeliveryFailedException;
+use App\Services\Notifications\Twilio\Interfaces\TwilioServiceInterface;
+use DateTimeImmutable;
+use DateTimeZone;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Psr\Clock\ClockInterface;
+use Tests\Feature\Api\ApiTestCase;
+
+/**
+ * These run the real command against the real tables, with only the SMS transport replaced. 1985-10-26 was a Saturday, so
+ * the notification (one day ahead, at 18:30 in a UTC house) finds the Sunday bin.
+ */
+final class TriggerNotificationsTest extends ApiTestCase
+{
+    private const string SLOT = '1985-10-26 18:30';
+
+    private RecordingTwilioService $twilio;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->useLimits();
+
+        $this->twilio = new RecordingTwilioService();
+        $this->app->instance(TwilioServiceInterface::class, $this->twilio);
+    }
+
+    public function testADryRunClaimsNothingAndSendsNothing(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT, '--dry' => true])
+            ->expectsOutputToContain('Would send to "+61400000000" with 1 bins (Rubbish)')
+            ->expectsOutputToContain('1 due, 0 skipped, 1 would be sent')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+        self::assertSame(0, DB::table('notification_logs')->count());
+    }
+
+    public function testAFailedSlotIsRetriedByALaterScheduledRun(): void
+    {
+        $this->givenANotificationIsDue();
+        $this->twilio->failure = new DeliveryFailedException('Twilio\\Exceptions\\RestException (code 20003)');
+        $this->givenTheTimeIs('1985-10-26 18:30:10');
+
+        $this->artisan('bin-night:trigger-notifications')->assertExitCode(1);
+
+        self::assertSame('failed', DB::table('notification_logs')->value('status'));
+
+        $this->twilio->failure = null;
+        $this->givenTheTimeIs('1985-10-26 19:00:10');
+
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent, 0 failed')
+            ->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        self::assertSame('sent', DB::table('notification_logs')->value('status'));
+        self::assertSame(1, DB::table('notification_logs')->count());
+    }
+
+    public function testAFailedSlotIsRetriedWhenTheSlotIsRunAgain(): void
+    {
+        $notificationId = $this->givenANotificationIsDue();
+        $this->twilio->failure = new DeliveryFailedException('Twilio\\Exceptions\\RestException (code 21211)');
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 0 skipped, 0 sent, 1 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(1);
+
+        $log = DB::table('notification_logs')->where('notification_id', $notificationId)->first();
+        self::assertSame('failed', $log->status);
+        self::assertSame('Twilio\\Exceptions\\RestException (code 21211)', $log->failure_reason);
+        self::assertStringNotContainsString('+61400000000', (string) $log->failure_reason);
+        self::assertSame([], $this->twilio->messages);
+
+        $this->twilio->failure = null;
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(0);
+
+        self::assertSame([['message' => 'Rubbish', 'to' => '+61400000000']], $this->twilio->messages);
+        $log = DB::table('notification_logs')->where('notification_id', $notificationId)->first();
+        self::assertSame('sent', $log->status);
+        self::assertNull($log->failure_reason);
+        self::assertNotNull($log->sent_at);
+        self::assertSame(1, DB::table('notification_logs')->count());
+    }
+
+    public function testALateRunSendsTheSlotItMissedOnceOnly(): void
+    {
+        $this->givenANotificationIsDue();
+        $this->givenTheTimeIs('1985-10-26 19:00:10');
+
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('1985-10-26 17:00 to 1985-10-26 19:00: 1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(0);
+
+        self::assertSame([['message' => 'Rubbish', 'to' => '+61400000000']], $this->twilio->messages);
+        self::assertSame('1985-10-26 18:30:00', DB::table('notification_logs')->value('scheduled_for'));
+
+        $this->givenTheTimeIs('1985-10-26 19:30:10');
+
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('1985-10-26 17:30 to 1985-10-26 19:30: 0 due, 0 skipped, 0 sent')
+            ->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+    }
+
+    public function testAnExplicitTimeDoesNotCatchUp(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 19:00'])
+            ->expectsOutputToContain('1985-10-26 19:00: 0 due')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+    }
+
+    public function testANotificationChangedAfterTheMissedSlotIsNotSentLate(): void
+    {
+        $notificationId = $this->givenANotificationIsDue();
+        DB::table('notifications')->where('id', $notificationId)->update(['updated_at' => '1985-10-26 18:45:00']);
+        $this->givenTheTimeIs('1985-10-26 19:00:10');
+
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('1 due, 1 skipped, 0 sent')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+        self::assertSame(0, DB::table('notification_logs')->count());
+    }
+
+    public function testASlotOutsideTheWindowIsNotCaughtUp(): void
+    {
+        $this->givenANotificationIsDue();
+        $this->givenTheTimeIs('1985-10-26 19:00:10');
+        \config(['notifications.catch_up_hours' => 0]);
+
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('1985-10-26 19:00: 0 due')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+    }
+
+    public function testASlotThatIsBeingSentIsNotSentAgain(): void
+    {
+        $notificationId = $this->givenANotificationIsDue();
+        DB::table('notification_logs')->insert([
+            'id' => (string) Str::uuid(),
+            'notification_id' => $notificationId,
+            'scheduled_for' => '1985-10-26 18:30:00',
+            'status' => 'processing',
+            'created_at' => '1985-10-26 18:30:00',
+            'updated_at' => '1985-10-26 18:30:00',
+        ]);
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 1 in progress')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+        self::assertSame('processing', DB::table('notification_logs')->value('status'));
+    }
+
+    public function testNextWeeksSlotIsSentAgain(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-11-02 18:30'])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent')
+            ->assertExitCode(0);
+
+        self::assertCount(2, $this->twilio->messages);
+        self::assertSame(2, DB::table('notification_logs')->count());
+    }
+
+    public function testRunningTheSameSlotTwiceSendsOnce(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('0 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(0);
+
+        self::assertSame([['message' => 'Rubbish', 'to' => '+61400000000']], $this->twilio->messages);
+        self::assertSame(1, DB::table('notification_logs')->count());
+    }
+
+    public function testTheSlotIsTheFlooredHalfHourSoALateRunDoesNotSendTwice(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:30'])->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:47'])->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+    }
+
+    /** Returns the id of a notification that is due in the slot, with a Sunday weekly bin called "Rubbish". */
+    private function givenANotificationIsDue(): string
+    {
+        $houseId = $this->createHouse('Hill Valley', '1955-11-12 06:00:00');
+        DB::table('houses')->where('id', $houseId)->update(['timezone' => 'UTC']);
+
+        $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
+        DB::table('bins')->where('id', $binId)->update(['day_of_week' => 'sunday']);
+
+        return $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+    }
+
+    private function givenTheTimeIs(string $utc): void
+    {
+        $this->app->instance(ClockInterface::class, new KnownClock(new DateTimeImmutable($utc, new DateTimeZone('UTC'))));
+    }
+}

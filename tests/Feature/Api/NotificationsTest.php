@@ -76,6 +76,17 @@ final class NotificationsTest extends ApiTestCase
             ->assertJsonValidationErrors(['type']);
     }
 
+    public function testCreateRejectsASendTimeOffTheHalfHour(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'send_time' => '18:15'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00 or 18:30.');
+
+        self::assertSame(0, DB::table('notifications')->count());
+    }
+
     public function testCreateRejectsInvalidInput(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
@@ -225,6 +236,18 @@ final class NotificationsTest extends ApiTestCase
         $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 2])->assertNotFound();
 
         self::assertSame(1, DB::table('notifications')->where('id', $notificationId)->value('lead_days'));
+    }
+
+    public function testUpdateRejectsASendTimeOffTheHalfHour(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['send_time' => '07:45'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00 or 18:30.');
+
+        self::assertSame('18:30', DB::table('notifications')->where('id', $notificationId)->value('send_time'));
     }
 
     public function testUpdateRejectsInvalidInput(): void

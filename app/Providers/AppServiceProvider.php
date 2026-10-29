@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Services\Clock\Clock;
+use App\Services\Notifications\Interfaces\NotificationDeliveryInterface;
+use App\Services\Notifications\NotificationDelivery;
 use App\Services\Notifications\Twilio\Interfaces\TwilioServiceInterface;
 use App\Services\Notifications\Twilio\TwilioDumper;
 use App\Services\Notifications\Twilio\TwilioService;
@@ -24,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(ClockInterface::class, Clock::class);
         $this->app->singleton(AttachActiveEntitiesInterface::class, AttachActiveEntities::class);
+        $this->app->singleton(NotificationDeliveryInterface::class, NotificationDelivery::class);
         $this->app->singleton(ScheduleServiceInterface::class, ScheduleService::class);
         $this->app->singleton(TwilioServiceInterface::class, $isDevelopment ? TwilioDumper::class : TwilioService::class);
     }

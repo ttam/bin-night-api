@@ -21,7 +21,12 @@ abstract class AbstractNotificationRequest extends FormRequest
 
     public function messages(): array
     {
-        return $this->getTargetFormat()['messages'];
+        return [
+            // The schedule only looks at each half hour, so a time between them would never be sent.
+            'send_time.regex' => 'The send time must be on the hour or half hour, like 18:00 or 18:30.',
+
+            ...$this->getTargetFormat()['messages'],
+        ];
     }
 
     /** @return array<string, array<mixed>> */

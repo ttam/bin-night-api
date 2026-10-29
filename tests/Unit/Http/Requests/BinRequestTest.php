@@ -61,6 +61,7 @@ final class BinRequestTest extends TestCase
             'house_id' => 'not-a-uuid',
             'lid_color' => '#00dd00',
             'name' => 'Example',
+            'start_date' => '1985-10-26',
         ], new CreateBinRequest()->rules());
 
         self::assertFalse($validator->passes());
@@ -73,9 +74,39 @@ final class BinRequestTest extends TestCase
 
         self::assertFalse($validator->passes());
         self::assertSame(
-            ['bin_color', 'cycle', 'lid_color', 'name', 'house_id'],
+            ['bin_color', 'cycle', 'lid_color', 'name', 'start_date', 'house_id'],
             \array_keys($validator->errors()->toArray()),
         );
+    }
+
+    public function testCreateRequestRequiresAStartDate(): void
+    {
+        $rules = ['start_date' => new CreateBinRequest()->rules()['start_date']];
+
+        self::assertFalse($this->getValidator([], $rules)->passes());
+        self::assertFalse($this->getValidator(['start_date' => null], $rules)->passes());
+        self::assertFalse($this->getValidator(['start_date' => ''], $rules)->passes());
+        self::assertTrue($this->getValidator(['start_date' => '1985-11-06'], $rules)->passes());
+    }
+
+    public function testStartDateMustBeARealDateInYearMonthDayForm(): void
+    {
+        $rules = ['start_date' => new CreateBinRequest()->rules()['start_date']];
+
+        foreach (['06/11/1985', '1985-11-6', '1985-02-30', '1985-13-01', 'next wednesday', '1985-11-06 10:00', 20251106, ['1985-11-06']] as $bad) {
+            $validator = $this->getValidator(['start_date' => $bad], $rules);
+
+            self::assertFalse($validator->passes(), \json_encode($bad, JSON_THROW_ON_ERROR));
+        }
+    }
+
+    public function testUpdateRequestAcceptsAStartDate(): void
+    {
+        $rules = $this->makeUpdateRequest()->rules();
+
+        self::assertTrue($this->getValidator([], ['start_date' => $rules['start_date']])->passes());
+        self::assertTrue($this->getValidator(['start_date' => '1985-11-06'], ['start_date' => $rules['start_date']])->passes());
+        self::assertFalse($this->getValidator(['start_date' => 'soon'], ['start_date' => $rules['start_date']])->passes());
     }
 
     public function testUpdateRequestAllowsABinToKeepItsOwnName(): void

@@ -9,14 +9,14 @@ use App\Http\Requests\Bin\UpdateBinRequest;
 
 final readonly class UpdateBin
 {
-    /** @param array{bin_color?: string, cycle?: Cycle, lid_color?: string, name?: string} $values */
+    /** @param array{bin_color?: string, cycle?: Cycle, lid_color?: string, name?: string, start_date?: string} $values */
     public function __construct(private array $values)
     {
     }
 
     public static function fromRequest(UpdateBinRequest $request): self
     {
-        /** @var array{bin_color?: string, cycle?: string, lid_color?: string, name?: string} $validated */
+        /** @var array{bin_color?: string, cycle?: string, lid_color?: string, name?: string, start_date?: string|null} $validated */
         $validated = $request->validated();
 
         $values = [];
@@ -35,6 +35,11 @@ final readonly class UpdateBin
 
         if (\array_key_exists('name', $validated)) {
             $values['name'] = $validated['name'];
+        }
+
+        // isset rather than array_key_exists because we don't want the value to be null
+        if (isset($validated['start_date'])) {
+            $values['start_date'] = $validated['start_date'];
         }
 
         return new self($values);
@@ -59,6 +64,10 @@ final readonly class UpdateBin
 
         if (\array_key_exists('name', $this->values)) {
             $values['name'] = $this->values['name'];
+        }
+
+        if (\array_key_exists('start_date', $this->values)) {
+            $values['start_date'] = $this->values['start_date'];
         }
 
         return $values;

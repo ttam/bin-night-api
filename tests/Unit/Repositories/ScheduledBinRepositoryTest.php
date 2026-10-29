@@ -24,7 +24,7 @@ final class ScheduledBinRepositoryTest extends TestCase
     public function testCreateBinDecoratesCorrectly(): void
     {
         $user = new AuthenticatedUser(['sub' => 'example']);
-        $data = new CreateBin('#00dd00', Cycle::WEEKLY, 'house-1', '#00dd00', 'Example');
+        $data = new CreateBin('#00dd00', Cycle::WEEKLY, 'house-1', '#00dd00', 'Example', '1985-10-26');
         $bin = new Bin();
 
         $binRepository = $this->createMock(BinRepositoryInterface::class);

@@ -30,6 +30,8 @@ abstract class AbstractBinRequest extends FormRequest
             'lid_color' => [$this->presence, 'hex_color'],
 
             'name' => [$this->presence, 'string', 'max:255'],
+
+            'start_date' => [$this->presence, 'date_format:Y-m-d'],
         ];
     }
 }

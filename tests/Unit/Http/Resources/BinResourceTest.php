@@ -22,6 +22,7 @@ final class BinResourceTest extends TestCase
             ->setAttribute('id', 'bin-1')
             ->setAttribute('lid_color', 'ffffff')
             ->setAttribute('name', 'Example Bin')
+            ->setAttribute('start_date', new \DateTimeImmutable('1985-10-26'))
             ->setRelation('house', new House()->setAttribute('timezone', 'UTC'));
 
         $request = $this->createActiveEntitiesRequest(binIds: ['bin-1']);
@@ -34,6 +35,7 @@ final class BinResourceTest extends TestCase
             'lid_color' => '#ffffff',
             'name' => 'Example Bin',
             'next_bin_night' => '1985-10-26T00:00:00+00:00',
+            'start_date' => '1985-10-26',
         ], new BinResource($bin)->toArray($request));
     }
 
@@ -46,6 +48,7 @@ final class BinResourceTest extends TestCase
             ->setAttribute('id', 'bin-1')
             ->setAttribute('lid_color', 'ffffff')
             ->setAttribute('name', 'Example Bin')
+            ->setAttribute('start_date', new \DateTimeImmutable('1985-10-26'))
             ->setRelation('house', new House()->setAttribute('timezone', 'UTC'));
 
         $request = $this->createActiveEntitiesRequest();

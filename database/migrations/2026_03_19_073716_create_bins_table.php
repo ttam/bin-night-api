@@ -22,8 +22,6 @@ return new class() extends Migration {
             $table->string('name');
             $table->enum('cycle', \array_column(Cycle::cases(), 'value'));
             $table->date('start_date');
-            $table->enum('day_of_week', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])->nullable();
-            $table->tinyInteger('week_of_month')->nullable();
             $table->string('lid_color', 6)->nullable();
             $table->string('bin_color', 6)->nullable();
             $table->timestamps();

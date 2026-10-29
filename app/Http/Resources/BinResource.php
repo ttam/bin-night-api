@@ -27,6 +27,7 @@ final class BinResource extends JsonResource
             'lid_color' => \sprintf('#%s', $this->resource->lidColor),
             'name' => $this->resource->name,
             'next_bin_night' => $active ? $this->resource->computedNextBinNight?->format(DateTimeInterface::ATOM) : null,
+            'start_date' => $this->resource->startDate->format('Y-m-d'),
         ];
     }
 }

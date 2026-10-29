@@ -177,6 +177,49 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertSame('processing', DB::table('notification_logs')->value('status'));
     }
 
+    public function testBinsCreatedThroughTheApiAreInTheNotification(): void
+    {
+        $this->useLimits(binsPerHouse: 3);
+        $houseId = $this->createHouse('Hill Valley', '1955-11-12 06:00:00');
+        DB::table('houses')->where('id', $houseId)->update(['bin_night' => 'sunday', 'timezone' => 'UTC']);
+        $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+        $this->givenTheTimeIs('1985-10-26 12:00');
+
+        // All three start on Sunday the 27th, the house's bin night.
+        foreach (['weekly' => 'Rubbish', 'fortnightly' => 'Recycling', 'monthly' => 'Garden'] as $cycle => $name) {
+            $this->postJson('/api/v1/bins', [
+                'bin_color' => '#000000',
+                'cycle' => $cycle,
+                'house_id' => $houseId,
+                'lid_color' => '#ffffff',
+                'name' => $name,
+                'start_date' => '1985-10-27',
+            ])->assertCreated()->assertJsonPath('data.start_date', '1985-10-27');
+        }
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent')
+            ->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        $bins = \explode(', ', $this->twilio->messages[0]['message']);
+        \sort($bins);
+        self::assertSame(['Garden', 'Recycling', 'Rubbish'], $bins);
+
+        // Nothing goes out before the start date: the slot before looks ahead to Sunday the 20th, a bin night a week earlier.
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-19 18:30'])
+            ->expectsOutputToContain('1 due, 1 skipped, 0 sent')
+            ->assertExitCode(0);
+        self::assertCount(1, $this->twilio->messages);
+
+        // A fortnight later only the weekly and fortnightly bins are due; the monthly one is a month on.
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-11-09 18:30'])->assertExitCode(0);
+
+        $bins = \explode(', ', $this->twilio->messages[1]['message']);
+        \sort($bins);
+        self::assertSame(['Recycling', 'Rubbish'], $bins);
+    }
+
     public function testNextWeeksSlotIsSentAgain(): void
     {
         $this->givenANotificationIsDue();
@@ -215,14 +258,13 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertCount(1, $this->twilio->messages);
     }
 
-    /** Returns the id of a notification that is due in the slot, with a Sunday weekly bin called "Rubbish". */
+    /** Returns the id of a notification that is due in the slot, for a house whose bin night is Sunday with a weekly bin called "Rubbish". */
     private function givenANotificationIsDue(): string
     {
         $houseId = $this->createHouse('Hill Valley', '1955-11-12 06:00:00');
-        DB::table('houses')->where('id', $houseId)->update(['timezone' => 'UTC']);
+        DB::table('houses')->where('id', $houseId)->update(['bin_night' => 'sunday', 'timezone' => 'UTC']);
 
-        $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
-        DB::table('bins')->where('id', $binId)->update(['day_of_week' => 'sunday']);
+        $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
 
         return $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
     }

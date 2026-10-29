@@ -15,6 +15,7 @@ final readonly class CreateBin
         public string $houseId,
         public string $lidColor,
         public string $name,
+        public string $startDate,
     ) {
     }
 
@@ -26,6 +27,7 @@ final readonly class CreateBin
             $request->string('house_id')->toString(),
             \ltrim($request->string('lid_color')->toString(), '#'),
             $request->string('name')->toString(),
+            $request->string('start_date')->toString(),
         );
     }
 }

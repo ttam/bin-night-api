@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Services\Clock\KnownClock;
+use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Support\Facades\DB;
+use Psr\Clock\ClockInterface;
 
 final class BinsTest extends ApiTestCase
 {
@@ -30,6 +34,18 @@ final class BinsTest extends ApiTestCase
         self::assertSame(0, DB::table('bins')->count());
     }
 
+    public function testCreateKeepsAGivenStartDateAndUsesItForTheNextBinNight(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->givenTheTimeIs('1985-10-24 20:00:00');
+
+        // A fortnightly bin that starts on Monday 4 November does not go out on Monday 28 October.
+        $this->postJson('/api/v1/bins', [...$this->validPayload($houseId), 'cycle' => 'fortnightly', 'start_date' => '1985-11-04'])
+            ->assertCreated()
+            ->assertJsonPath('data.start_date', '1985-11-04')
+            ->assertJsonPath('data.next_bin_night', '1985-11-04T00:00:00-08:00');
+    }
+
     public function testCreateOverThePlanLimitIsRejected(): void
     {
         $this->useLimits(binsPerHouse: 1);
@@ -43,6 +59,19 @@ final class BinsTest extends ApiTestCase
         self::assertSame(1, DB::table('bins')->count());
     }
 
+    public function testCreateRejectsAnInvalidStartDate(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        foreach (['1985-02-30', '06/11/1985', 'next monday'] as $startDate) {
+            $this->postJson('/api/v1/bins', [...$this->validPayload($houseId), 'start_date' => $startDate])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['start_date']);
+        }
+
+        self::assertSame(0, DB::table('bins')->count());
+    }
+
     public function testCreateRejectsInvalidInput(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
@@ -50,6 +79,19 @@ final class BinsTest extends ApiTestCase
         $this->postJson('/api/v1/bins', ['house_id' => $houseId])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['bin_color', 'cycle', 'lid_color', 'name']);
+    }
+
+    public function testCreateRequiresAStartDate(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $payload = $this->validPayload($houseId);
+        unset($payload['start_date']);
+
+        $this->postJson('/api/v1/bins', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['start_date']);
+
+        self::assertSame(0, DB::table('bins')->count());
     }
 
     public function testCreateWithoutAHouseIsNotFound(): void
@@ -120,11 +162,37 @@ final class BinsTest extends ApiTestCase
         self::assertNull($bins['Newer']['next_bin_night']);
     }
 
+    public function testNothingGoesOutBeforeTheStartDate(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->givenTheTimeIs('1985-10-24 20:00:00');
+
+        // The house's bin night is Monday. A weekly bin that starts on Thursday 5 December goes out from Monday the 9th.
+        $this->postJson('/api/v1/bins', [...$this->validPayload($houseId), 'start_date' => '1985-12-05'])
+            ->assertCreated()
+            ->assertJsonPath('data.start_date', '1985-12-05')
+            ->assertJsonPath('data.next_bin_night', '1985-12-09T00:00:00-08:00');
+    }
+
     public function testRequiresAuthentication(): void
     {
         \config(['authentication.clerk.development_user' => null]);
 
         $this->getJson('/api/v1/bins')->assertUnauthorized();
+    }
+
+    public function testUpdateCanChangeTheCycleWithoutSayingWhichWeek(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
+        $this->givenTheTimeIs('1985-10-24 20:00:00');
+
+        foreach (['fortnightly', 'monthly', 'weekly'] as $cycle) {
+            $this->patchJson('/api/v1/bins/' . $binId, ['cycle' => $cycle])
+                ->assertOk()
+                ->assertJsonPath('data.cycle', $cycle)
+                ->assertJsonPath('data.start_date', '1985-10-26');
+        }
     }
 
     public function testUpdateChangesTheBin(): void
@@ -138,6 +206,24 @@ final class BinsTest extends ApiTestCase
             ->assertJsonPath('data.name', 'Garden');
 
         self::assertSame('Garden', DB::table('bins')->where('id', $binId)->value('name'));
+    }
+
+    public function testUpdateChangesTheStartDateAndSoTheWeeks(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
+        DB::table('bins')->where('id', $binId)->update(['cycle' => 'fortnightly', 'start_date' => '1985-10-28']);
+        $this->givenTheTimeIs('1985-10-29 20:00:00');
+
+        // Moving the start date a week moves the fortnightly bin to the other weeks.
+        $this->patchJson('/api/v1/bins/' . $binId, ['start_date' => '1985-11-04'])
+            ->assertOk()
+            ->assertJsonPath('data.start_date', '1985-11-04')
+            ->assertJsonPath('data.next_bin_night', '1985-11-04T00:00:00-08:00');
+
+        $this->patchJson('/api/v1/bins/' . $binId, ['start_date' => '1985-10-28'])
+            ->assertOk()
+            ->assertJsonPath('data.next_bin_night', '1985-11-11T00:00:00-08:00');
     }
 
     public function testUpdateKeepsAnOverLimitBinEditableAndInactive(): void
@@ -165,6 +251,11 @@ final class BinsTest extends ApiTestCase
         self::assertSame('Rubbish', DB::table('bins')->where('id', $binId)->value('name'));
     }
 
+    private function givenTheTimeIs(string $utc): void
+    {
+        $this->app->instance(ClockInterface::class, new KnownClock(new DateTimeImmutable($utc, new DateTimeZone('UTC'))));
+    }
+
     private function validPayload(string $houseId): array
     {
         return [
@@ -173,6 +264,7 @@ final class BinsTest extends ApiTestCase
             'house_id' => $houseId,
             'lid_color' => '#ffffff',
             'name' => 'Rubbish',
+            'start_date' => '1985-10-21',
         ];
     }
 }

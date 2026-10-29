@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['bin_color', 'cycle', 'lid_color', 'name'])]
+#[Fillable(['bin_color', 'cycle', 'lid_color', 'name', 'start_date'])]
 final class Bin extends Model
 {
     use ReleasesNameOnDelete;
@@ -50,10 +50,6 @@ final class Bin extends Model
         get => $this->getAttribute('name');
     }
 
-    public ?int $weekOfMonth {
-        get => $this->getAttribute('week_of_month');
-    }
-
     public DateTimeImmutable $startDate {
         get => $this->getAttribute('start_date');
     }
@@ -68,7 +64,7 @@ final class Bin extends Model
     {
         return [
             'cycle' => Cycle::class,
-            'start_date' => 'immutable_datetime',
+            'start_date' => 'immutable_date:Y-m-d',
         ];
     }
 }

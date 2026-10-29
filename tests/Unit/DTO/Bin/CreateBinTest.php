@@ -19,6 +19,7 @@ final class CreateBinTest extends TestCase
             'house_id' => '00000000-0000-0000-0000-000000000000',
             'lid_color' => '#ffffff',
             'name' => 'Example',
+            'start_date' => '1985-11-06',
         ]));
 
         self::assertSame('00dd00', $dto->binColor);
@@ -26,5 +27,6 @@ final class CreateBinTest extends TestCase
         self::assertSame('00000000-0000-0000-0000-000000000000', $dto->houseId);
         self::assertSame('ffffff', $dto->lidColor);
         self::assertSame('Example', $dto->name);
+        self::assertSame('1985-11-06', $dto->startDate);
     }
 }

@@ -14,10 +14,11 @@ return new class() extends Migration {
     {
         Schema::create('users', static function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->string('name');
-            $table->string('email')->unique();
+            $table->string('external_id', 64)->unique();
+            $table->string('name')->nullable();
+            $table->string('email')->nullable();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

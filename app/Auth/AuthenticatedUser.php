@@ -9,7 +9,11 @@ use Illuminate\Http\Request;
 
 final readonly class AuthenticatedUser
 {
+    public ?string $email;
+
     public string $id;
+
+    public ?string $name;
 
     /** @param array<mixed> $claims */
     public function __construct(public array $claims = [])
@@ -21,6 +25,8 @@ final readonly class AuthenticatedUser
         }
 
         $this->id = $sub;
+        $this->email = self::cleanClaim($claims['email'] ?? null);
+        $this->name = self::cleanClaim($claims['name'] ?? null);
     }
 
     /** The user the authentication middleware put on the request. */
@@ -31,5 +37,15 @@ final readonly class AuthenticatedUser
         $user = ($request->getUserResolver())();
 
         return $user;
+    }
+
+    private static function cleanClaim(mixed $value): ?string
+    {
+        if (\is_string($value) === false || \trim($value) === '') {
+            return null;
+        }
+
+        // The columns hold 255 characters.
+        return \mb_substr(\trim($value), 0, 255);
     }
 }

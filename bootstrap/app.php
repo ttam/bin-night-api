@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Middleware\AuthenticateBearerToken;
 use App\Http\Middleware\Authorize;
 use App\Http\Middleware\LoadActiveEntities;
+use App\Http\Middleware\ProvisionUser;
 use App\Policies\AbstractPolicy;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Console\Scheduling\Schedule;
@@ -27,6 +28,7 @@ return Application::configure(basePath: \dirname(__DIR__))
             'active-entities' => LoadActiveEntities::class,
             'can' => Authorize::class,
             'jwt.auth' => AuthenticateBearerToken::class,
+            'provision-user' => ProvisionUser::class,
         ]);
     })
     ->withSchedule(static function (Schedule $schedule): void {

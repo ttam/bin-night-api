@@ -27,6 +27,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'external_id' => \sprintf('user_%s', Str::random(27)),
             'name' => \fake()->name(),
             'email' => \fake()->unique()->safeEmail(),
             'email_verified_at' => \now(),

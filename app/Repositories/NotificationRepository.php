@@ -6,17 +6,16 @@ namespace App\Repositories;
 
 use App\Auth\AuthenticatedUser;
 use App\DTO\Notification\CreateNotification;
+use App\DTO\Notification\DueNotification;
 use App\DTO\Notification\UpdateNotification;
 use App\Enums\DeliveryStatus;
-use App\Models\House;
 use App\Models\Notification;
+use App\Models\NotificationLog;
 use App\Models\User;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
+use App\Services\Schedule\Calendar;
 use DateTimeImmutable;
-use DateTimeInterface;
 use DateTimeZone;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 
 final readonly class NotificationRepository implements NotificationRepositoryInterface
@@ -46,44 +45,48 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
     }
 
     /** @inheritDoc */
-    public function getDueNotifications(DateTimeInterface $dateTime): Collection
+    public function getDueNotifications(DateTimeImmutable $after, DateTimeImmutable $until): Collection
     {
-        // Work out the time in each timezone that houses are in here, rather than asking the database to convert it: a
-        // database can only convert named timezones once its timezone tables are loaded, and without them it quietly
-        // finds nothing. Grouped by local time, there are only a few cases to ask about.
-        $slot = DateTimeImmutable::createFromInterface($dateTime);
-        $timezonesByLocalTime = [];
+        $utc = new DateTimeZone('UTC');
+        $after = $after->setTimezone($utc);
+        $until = $until->setTimezone($utc);
 
-        foreach (House::query()->distinct()->pluck('timezone') as $timezone) {
-            /** @var string $timezone */
-            $timezonesByLocalTime[$slot->setTimezone(new DateTimeZone($timezone))->format('H:i:s')][] = $timezone;
-        }
-
-        if ($timezonesByLocalTime === []) {
-            return new Collection();
-        }
-
-        return new Notification()->newQuery()
-            ->select('notifications.*', 'users.external_id as user_external_id')
+        // The send instant is worked out here, in PHP, for each notification and each local date the window touches.
+        // A database cannot do it: it would need its timezone tables loaded, and on a clock-change night a local time
+        // has two instants or none. There are few notifications per user, so reading them all is cheap.
+        $notifications = new Notification()->newQuery()
+            ->select('notifications.*', 'users.external_id as user_external_id', 'houses.timezone as house_timezone')
             ->join('houses', 'notifications.house_id', '=', 'houses.id')
             ->join('users', 'notifications.user_id', '=', 'users.id')
-            ->where(static function (Builder $query) use ($timezonesByLocalTime): void {
-                foreach ($timezonesByLocalTime as $localTime => $timezones) {
-                    // Send times are HH:MM:SS everywhere: in the API, in the database and in the answer.
-                    $query->orWhere(static fn (Builder $query): Builder => $query
-                        ->whereIn('houses.timezone', $timezones)
-                        ->where('notifications.send_time', '=', $localTime));
-                }
-            })
-            // A slot that has been sent is finished. One that failed, or is still processing, stays due so that a later
-            // run retries it or reports it.
-            ->whereNotExists(static fn (QueryBuilder $query): QueryBuilder => $query
-                ->selectRaw('1')
-                ->from('notification_logs')
-                ->whereColumn('notification_logs.notification_id', 'notifications.id')
-                ->where('notification_logs.scheduled_for', '=', $dateTime)
-                ->where('notification_logs.status', '=', DeliveryStatus::SENT->value))
             ->get();
+
+        $sent = $this->sentBetween($after, $until);
+        $timezones = [];
+        $due = [];
+
+        foreach ($notifications as $notification) {
+            /** @var string $timezoneName */
+            $timezoneName = $notification->getAttribute('house_timezone');
+            /** @var string $sendTime */
+            $sendTime = $notification->getAttribute('send_time');
+
+            $timezone = $timezones[$timezoneName] ??= new DateTimeZone($timezoneName);
+
+            $day = $after->setTimezone($timezone)->setTime(0, 0);
+            $lastDay = $until->setTimezone($timezone)->format('Y-m-d');
+
+            for (; $day->format('Y-m-d') <= $lastDay; $day = $day->modify('+1 day')) {
+                $dueAt = Calendar::sendInstant($day->format('Y-m-d'), $sendTime, $timezone);
+
+                if ($dueAt > $after && $dueAt <= $until && isset($sent[$this->key($notification, $dueAt)]) === false) {
+                    $due[] = new DueNotification($notification, $dueAt);
+                }
+            }
+        }
+
+        \usort($due, fn (DueNotification $a, DueNotification $b): int => [$a->dueAt, $this->key($a->notification, $a->dueAt)] <=> [$b->dueAt, $this->key($b->notification, $b->dueAt)]);
+
+        return new Collection($due);
     }
 
     /** @inheritDoc */
@@ -101,5 +104,41 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
         $notification->fill($data->toDatabaseArray())->save();
 
         return $notification;
+    }
+
+    private function key(Notification $notification, DateTimeImmutable $dueAt): string
+    {
+        /** @var string $id */
+        $id = $notification->getKey();
+
+        return \sprintf(
+            '%s|%s',
+            $id,
+            $dueAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+        );
+    }
+
+    /**
+     * A slot that has been sent is finished. One that failed, or is still processing, stays due so that a later run
+     * retries it or reports it.
+     *
+     * @return array<string, true>
+     */
+    private function sentBetween(DateTimeImmutable $after, DateTimeImmutable $until): array
+    {
+        $sent = [];
+
+        $rows = NotificationLog::query()->toBase()
+            ->where('status', '=', DeliveryStatus::SENT->value)
+            ->where('scheduled_for', '>', $after)
+            ->where('scheduled_for', '<=', $until)
+            ->get(['notification_id', 'scheduled_for']);
+
+        foreach ($rows as $row) {
+            /** @var object{notification_id: string, scheduled_for: string} $row */
+            $sent[$row->notification_id . '|' . $row->scheduled_for] = true;
+        }
+
+        return $sent;
     }
 }

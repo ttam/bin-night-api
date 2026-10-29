@@ -35,6 +35,8 @@ class TriggerNotifications extends Command
 
     private const int EXIT_CODE_OK = 0;
 
+    private const int SLOT_MINUTES = 15;
+
     public function handle(
         ActiveEntityRepositoryInterface $activeEntityRepository,
         BinRepositoryInterface $binRepository,
@@ -53,19 +55,16 @@ class TriggerNotifications extends Command
             return self::EXIT_CODE_BAD_INPUT;
         }
 
-        $dateTime = $this->floorToSlot($time);
+        $until = $this->floorToSlot($time);
 
-        // A time given on the command line is an instruction to run that slot, so only a scheduled run catches up.
-        $slots = $this->slots($dateTime, $now === null ? \max(0, $config->integer('notifications.catch_up_hours')) : 0);
+        // A time given on the command line is an instruction to run that moment, so only a scheduled run catches up.
+        $catchUpHours = $now === null ? \max(0, $config->integer('notifications.catch_up_hours')) : 0;
 
-        /** @var list<array{0: DateTimeImmutable, 1: \App\Models\Notification}> $due */
-        $due = [];
+        // A run covers everything due since the previous one, which is one slot back, and then as far back again as the
+        // catch-up allows. A notification that was due at a moment not on the grid still goes out on the next run.
+        $after = $until->modify(\sprintf('-%d minutes', $catchUpHours * 60 + self::SLOT_MINUTES));
 
-        foreach ($slots as $slot) {
-            foreach ($notificationRepository->getDueNotifications($slot) as $notification) {
-                $due[] = [$slot, $notification];
-            }
-        }
+        $due = $notificationRepository->getDueNotifications($after, $until);
 
         /** @var array<string, \App\Services\Plan\ActiveEntities> $activeEntities */
         $activeEntities = [];
@@ -74,12 +73,15 @@ class TriggerNotifications extends Command
         $skipped = 0;
         $wouldSend = 0;
 
-        foreach ($due as [$slot, $notification]) {
-            // Changing a notification after the slot does not entitle it to the slot: someone who moves a notification
-            // to 18:30 at 18:50 should not be sent a message for 18:30 at 19:00.
+        foreach ($due as $dueNotification) {
+            $notification = $dueNotification->notification;
+            $dueAt = $dueNotification->dueAt;
+
+            // Changing a notification after it was due does not entitle it to that moment: someone who moves a
+            // notification to 18:30 at 18:50 should not be sent a message for 18:30 at 19:00.
             $updatedAt = $notification->updatedAt;
 
-            if ($updatedAt !== null && $updatedAt > $slot) {
+            if ($updatedAt !== null && $updatedAt > $dueAt) {
                 $skipped++;
                 continue;
             }
@@ -93,7 +95,7 @@ class TriggerNotifications extends Command
             }
 
             $bins = $binRepository
-                ->getBinsForNotification($notification, $slot)
+                ->getBinsForNotification($notification, $dueAt)
                 ->filter(static fn (Bin $bin): bool => $userEntities->isBinActive($bin))
                 ->values();
 
@@ -113,10 +115,10 @@ class TriggerNotifications extends Command
                 continue;
             }
 
-            $results[$delivery->deliver($notification, $bins, $slot)->value]++;
+            $results[$delivery->deliver($notification, $bins, $dueAt)->value]++;
         }
 
-        $label = $this->label($slots);
+        $label = $this->label($until, $catchUpHours);
 
         return $dryRun
             ? $this->reportDryRun($label, \count($due), $skipped, $wouldSend)
@@ -124,25 +126,24 @@ class TriggerNotifications extends Command
     }
 
     /**
-     * Rounds a time down to the start of its half hour. The schedule runs every 30 minutes, but cron can start a little
-     * late (11:31 rather than 11:30), and notifications are matched against their send time exactly, so without this
-     * the 11:30 notifications would be missed.
+     * Rounds a time down to the start of its quarter hour. The schedule runs every 15 minutes, but cron can start a little
+     * late (11:46 rather than 11:45), so this makes a run cover the moment it was meant for.
      */
     private function floorToSlot(DateTimeImmutable $time): DateTimeImmutable
     {
         return $time->setTime(
             \intval($time->format('H')),
-            \intdiv(\intval($time->format('i')), 30) * 30,
+            \intdiv(\intval($time->format('i')), self::SLOT_MINUTES) * self::SLOT_MINUTES,
         );
     }
 
-    /** @param non-empty-list<DateTimeImmutable> $slots */
-    private function label(array $slots): string
+    /** The span a run covered, for its summary line. */
+    private function label(DateTimeImmutable $until, int $catchUpHours): string
     {
-        $first = $slots[0]->format('Y-m-d H:i');
-        $last = $slots[\array_key_last($slots)]->format('Y-m-d H:i');
+        $from = $until->modify(\sprintf('-%d hours', $catchUpHours))->format('Y-m-d H:i');
+        $to = $until->format('Y-m-d H:i');
 
-        return $first === $last ? $first : \sprintf('%s to %s', $first, $last);
+        return $from === $to ? $to : \sprintf('%s to %s', $from, $to);
     }
 
     /** Reads the `now` argument as a UTC time, or returns null if it is not a real date and time in `Y-m-d H:i` form. */
@@ -188,19 +189,5 @@ class TriggerNotifications extends Command
         $this->info(\sprintf('[DRY] %s: %d due, %d skipped, %d would be sent.', $label, $due, $skipped, $wouldSend));
 
         return self::EXIT_CODE_OK;
-    }
-
-    /**
-     * The slot itself and the half hours before it that fall inside the catch-up window, oldest first so that the
-     * messages go out in the order they were due.
-     *
-     * @return non-empty-list<DateTimeImmutable>
-     */
-    private function slots(DateTimeImmutable $slot, int $catchUpHours): array
-    {
-        return \array_map(
-            static fn (int $back): DateTimeImmutable => $slot->modify(\sprintf('-%d minutes', $back * 30)),
-            \range($catchUpHours * 2, 0),
-        );
     }
 }

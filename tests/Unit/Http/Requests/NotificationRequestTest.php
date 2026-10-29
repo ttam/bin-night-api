@@ -45,7 +45,7 @@ final class NotificationRequestTest extends TestCase
 
     public static function getBadSendTimes(): iterable
     {
-        yield 'Not on the half hour' => ['11:21:00'];
+        yield 'Not on a quarter hour' => ['11:21:00'];
 
         yield 'Not a time' => ['noon'];
 
@@ -57,7 +57,9 @@ final class NotificationRequestTest extends TestCase
 
         yield 'Seconds that are not zero' => ['18:30:30'];
 
-        yield 'Off the half hour with seconds' => ['18:15:00'];
+        yield 'Between quarter hours' => ['18:20:00'];
+
+        yield 'Five past' => ['18:05:00'];
 
         yield 'Seconds without the minutes' => ['18::00'];
     }
@@ -210,15 +212,24 @@ final class NotificationRequestTest extends TestCase
     {
         self::assertSame(
             [
-                'send_time.date_format' => 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.',
-                'send_time.regex' => 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.',
+                'send_time.date_format' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
+                'send_time.regex' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
             ],
             new CreateNotificationRequest()->messages(),
         );
     }
 
+    public function testSendTimeBetweenQuarterHoursGetsTheQuarterHourMessage(): void
+    {
+        $request = new CreateNotificationRequest();
+        $validator = $this->getValidator(['send_time' => '18:20:00'], ['send_time' => $request->rules()['send_time']], $request->messages());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['The send time must be on a quarter hour, like 18:00:00 or 18:45:00.'], $validator->errors()->get('send_time'));
+    }
+
     #[DataProvider('getBadSendTimes')]
-    public function testSendTimeNotOnTheHalfHourIsExplained(string $sendTime): void
+    public function testSendTimeNotOnAQuarterHourIsExplained(string $sendTime): void
     {
         $request = new CreateNotificationRequest();
         $validator = $this->getValidator(['send_time' => $sendTime], ['send_time' => $request->rules()['send_time']], $request->messages());
@@ -227,18 +238,9 @@ final class NotificationRequestTest extends TestCase
         self::assertCount(1, $validator->errors()->get('send_time'));
     }
 
-    public function testSendTimeOffTheHalfHourGetsTheHalfHourMessage(): void
+    public function testSendTimeOnAQuarterHourPasses(): void
     {
-        $request = new CreateNotificationRequest();
-        $validator = $this->getValidator(['send_time' => '18:15:00'], ['send_time' => $request->rules()['send_time']], $request->messages());
-
-        self::assertFalse($validator->passes());
-        self::assertSame(['The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.'], $validator->errors()->get('send_time'));
-    }
-
-    public function testSendTimeOnTheHourAndHalfHourPasses(): void
-    {
-        foreach (['00:00:00', '07:30:00', '18:00:00', '23:30:00'] as $sendTime) {
+        foreach (['00:00:00', '07:15:00', '07:30:00', '18:45:00', '23:45:00'] as $sendTime) {
             self::assertTrue($this->validate(['send_time' => $sendTime])->passes(), $sendTime);
         }
     }

@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 final class ScheduleTest extends TestCase
 {
-    public function testNotificationsRunEveryHalfHourAndNeverOverlap(): void
+    public function testNotificationsRunEveryQuarterHourAndNeverOverlap(): void
     {
         // The schedule is only defined once the console starts.
         $this->app->make(Kernel::class)->all();
@@ -22,8 +22,8 @@ final class ScheduleTest extends TestCase
         ));
 
         self::assertCount(1, $events);
-        self::assertSame('*/30 * * * *', $events[0]->expression);
+        self::assertSame('*/15 * * * *', $events[0]->expression);
         self::assertTrue($events[0]->withoutOverlapping);
-        self::assertSame(25, $events[0]->expiresAt);
+        self::assertSame(14, $events[0]->expiresAt);
     }
 }

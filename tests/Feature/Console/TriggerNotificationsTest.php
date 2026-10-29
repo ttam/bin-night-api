@@ -98,6 +98,16 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertSame(1, DB::table('notification_logs')->count());
     }
 
+    public function testALateRunIsRoundedDownToTheQuarterHourSoItDoesNotSendTwice(): void
+    {
+        $this->givenANotificationIsDue();
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:30'])->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:47'])->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+    }
+
     public function testALateRunSendsTheSlotItMissedOnceOnly(): void
     {
         $this->givenANotificationIsDue();
@@ -177,6 +187,63 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertSame('processing', DB::table('notification_logs')->value('status'));
     }
 
+    public function testATimeThatDoesNotExistIsSentOnceAsIfTheClocksHadNotChanged(): void
+    {
+        // Melbourne puts its clocks forward at 02:00 on Sunday 4 October 2026, so 02:30 never happens that night.
+        $this->givenANotificationIsDueAt('Australia/Melbourne', 'sunday', '02:30:00');
+
+        foreach (['2026-10-03 15:30', '2026-10-03 16:00', '2026-10-03 16:15'] as $now) {
+            $this->artisan('bin-night:trigger-notifications', ['now' => $now])->expectsOutputToContain('0 due')->assertExitCode(0);
+        }
+
+        // 03:30 in Melbourne that morning is 16:30 UTC.
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-10-03 16:30'])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent')
+            ->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-10-03 16:45'])->expectsOutputToContain('0 due')->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        self::assertSame('2026-10-03 16:30:00', DB::table('notification_logs')->value('scheduled_for'));
+    }
+
+    public function testATimeThatHappensTwiceIsSentOnlyAtTheFirstShowing(): void
+    {
+        // Los Angeles puts its clocks back at 02:00 on Sunday 1 November 2026, so 01:30 is 08:30 UTC and again 09:30 UTC.
+        $this->givenANotificationIsDueAt('America/Los_Angeles', 'sunday', '01:30:00');
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-11-01 08:30'])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent')
+            ->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-11-01 09:30'])
+            ->expectsOutputToContain('0 due')
+            ->assertExitCode(0);
+
+        // A scheduled run an hour later, catching up the last two hours, does not send it again either.
+        $this->givenTheTimeIs('2026-11-01 09:30:10');
+        $this->artisan('bin-night:trigger-notifications')
+            ->expectsOutputToContain('0 due')
+            ->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        self::assertSame('2026-11-01 08:30:00', DB::table('notification_logs')->value('scheduled_for'));
+    }
+
+    public function testAZoneAQuarterHourOffTheHourIsSentOnTime(): void
+    {
+        // 09:00 on Monday 1 June 2026 in Eucla (UTC+8:45) is 00:15 UTC, a time half-hour runs would never have reached.
+        $this->givenANotificationIsDueAt('Australia/Eucla', 'monday', '09:00:00');
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-06-01 00:00'])
+            ->expectsOutputToContain('0 due')
+            ->assertExitCode(0);
+        $this->artisan('bin-night:trigger-notifications', ['now' => '2026-06-01 00:15'])
+            ->expectsOutputToContain('1 due, 0 skipped, 1 sent')
+            ->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        self::assertSame('2026-06-01 00:15:00', DB::table('notification_logs')->value('scheduled_for'));
+    }
+
     public function testBinsCreatedThroughTheApiAreInTheNotification(): void
     {
         $this->useLimits(binsPerHouse: 3);
@@ -248,16 +315,6 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertSame(1, DB::table('notification_logs')->count());
     }
 
-    public function testTheSlotIsTheFlooredHalfHourSoALateRunDoesNotSendTwice(): void
-    {
-        $this->givenANotificationIsDue();
-
-        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:30'])->assertExitCode(0);
-        $this->artisan('bin-night:trigger-notifications', ['now' => '1985-10-26 18:47'])->assertExitCode(0);
-
-        self::assertCount(1, $this->twilio->messages);
-    }
-
     /** Returns the id of a notification that is due in the slot, for a house whose bin night is Sunday with a weekly bin called "Rubbish". */
     private function givenANotificationIsDue(): string
     {
@@ -267,6 +324,17 @@ final class TriggerNotificationsTest extends ApiTestCase
         $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
 
         return $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+    }
+
+    /** A notification that is sent on the day itself (no lead days) at the given local time, for a weekly bin called "Rubbish". */
+    private function givenANotificationIsDueAt(string $timezone, string $binNight, string $sendTime): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1955-11-12 06:00:00');
+        DB::table('houses')->where('id', $houseId)->update(['bin_night' => $binNight, 'timezone' => $timezone]);
+
+        $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+        DB::table('notifications')->where('id', $notificationId)->update(['lead_days' => 0, 'send_time' => $sendTime]);
     }
 
     private function givenTheTimeIs(string $utc): void

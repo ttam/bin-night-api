@@ -22,8 +22,8 @@ abstract class AbstractNotificationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'send_time.date_format' => 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.',
-            'send_time.regex' => 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.',
+            'send_time.date_format' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
+            'send_time.regex' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
 
             ...$this->getTargetFormat()['messages'],
         ];
@@ -37,7 +37,7 @@ abstract class AbstractNotificationRequest extends FormRequest
 
             'name' => [$this->presence, 'string', 'max:255'],
 
-            'send_time' => ['bail', $this->presence, 'date_format:H:i:s', 'regex:/^\d{2}:(00|30):00$/'],
+            'send_time' => ['bail', $this->presence, 'date_format:H:i:s', 'regex:/^\d{2}:(00|15|30|45):00$/'],
 
             'target' => [$this->presence, 'string', 'max:255', ...$this->getTargetFormat()['rules']],
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Console\Commands;
 
 use App\Console\Commands\TriggerNotifications;
+use App\DTO\Notification\DueNotification;
 use App\Enums\DeliveryResult;
 use App\Models\Bin;
 use App\Models\Notification;
@@ -32,6 +33,16 @@ final class TriggerNotificationsTest extends TestCase
     private array $info = [];
 
     private array $warnings = [];
+
+    /** @noinspection PhpUnhandledExceptionInspection */
+    public static function getCatchUpWindows(): iterable
+    {
+        yield 'No catch-up' => [0, '1985-10-26 01:00', '1985-10-26 01:15'];
+
+        yield 'One hour' => [1, '1985-10-26 00:00', '1985-10-26 00:15 to 1985-10-26 01:15'];
+
+        yield 'Twelve hours' => [12, '1985-10-25 13:00', '1985-10-25 13:15 to 1985-10-26 01:15'];
+    }
 
     /** @noinspection PhpUnhandledExceptionInspection */
     public static function getClockData(): iterable
@@ -67,25 +78,23 @@ final class TriggerNotificationsTest extends TestCase
         yield 'Impossible minute' => ['1985-10-26 01:99'];
     }
 
-    public function testACaughtUpSlotIsDeliveredAndItsBinsAreFoundForThatSlot(): void
+    public function testACaughtUpNotificationIsDeliveredForTheMomentItWasDue(): void
     {
-        $missed = new DateTimeImmutable('1985-10-26 00:30', new DateTimeZone('UTC'));
+        $dueAt = new DateTimeImmutable('1985-10-26 00:30', new DateTimeZone('UTC'));
         $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
         $bins = new Collection([new Bin()->setAttribute('id', 1)]);
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturnCallback(
-            static fn (DateTimeImmutable $slot): Collection => $slot == $missed ? new Collection([$notification]) : new Collection(),
-        );
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification, $dueAt));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createMock(BinRepositoryInterface::class);
-        $binRepository->expects($this->once())->method('getBinsForNotification')->with($notification, $missed)->willReturn($bins);
+        $binRepository->expects($this->once())->method('getBinsForNotification')->with($notification, $dueAt)->willReturn($bins);
 
         /** @var \App\Services\Notifications\Interfaces\NotificationDeliveryInterface&\PHPUnit\Framework\MockObject\MockObject $delivery */
         $delivery = $this->createMock(NotificationDeliveryInterface::class);
-        $delivery->expects($this->once())->method('deliver')->with($notification, $bins, $missed)->willReturn(DeliveryResult::SENT);
+        $delivery->expects($this->once())->method('deliver')->with($notification, $bins, $dueAt)->willReturn(DeliveryResult::SENT);
 
         $exitCode = $this->makeCommand(null, [])->handle(
             $this->makeActiveEntityRepository(),
@@ -97,7 +106,7 @@ final class TriggerNotificationsTest extends TestCase
         );
 
         self::assertSame(0, $exitCode);
-        self::assertSame(['1985-10-26 00:00 to 1985-10-26 01:00: 1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 00:15 to 1985-10-26 01:15: 1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
     public function testActiveEntitiesAreLoadedOncePerUser(): void
@@ -110,7 +119,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn($notifications);
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue(...$notifications->all()));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -134,7 +143,9 @@ final class TriggerNotificationsTest extends TestCase
     {
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createMock(NotificationRepositoryInterface::class);
-        $notificationRepository->expects($this->once())->method('getDueNotifications')->willReturn(new Collection());
+        $notificationRepository->expects($this->once())->method('getDueNotifications')
+            ->with(new DateTimeImmutable('1985-10-26 01:00', new DateTimeZone('UTC')), new DateTimeImmutable('1985-10-26 01:15', new DateTimeZone('UTC')))
+            ->willReturn(new Collection());
 
         $this->makeCommand(null, [])->handle(
             $this->makeActiveEntityRepository(),
@@ -146,12 +157,12 @@ final class TriggerNotificationsTest extends TestCase
         );
     }
 
-    public function testAnExplicitTimeOnlyRunsThatSlot(): void
+    public function testAnExplicitTimeOnlyRunsThatMoment(): void
     {
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createMock(NotificationRepositoryInterface::class);
         $notificationRepository->expects($this->once())->method('getDueNotifications')
-            ->with(new DateTimeImmutable('1985-10-26 01:00', new DateTimeZone('UTC')))
+            ->with(new DateTimeImmutable('1985-10-26 01:00', new DateTimeZone('UTC')), new DateTimeImmutable('1985-10-26 01:15', new DateTimeZone('UTC')))
             ->willReturn(new Collection());
 
         $this->makeCommand('1985-10-26 01:21', [])->handle(
@@ -163,34 +174,29 @@ final class TriggerNotificationsTest extends TestCase
             $notificationRepository,
         );
 
-        self::assertSame(['1985-10-26 01:00: 0 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 0 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
-    public function testAScheduledRunCatchesUpTheSlotsInTheWindowOldestFirst(): void
+    #[DataProvider('getCatchUpWindows')]
+    public function testAScheduledRunCoversTheLastQuarterHourAndAsFarBackAsTheCatchUpAllows(int $catchUpHours, string $after, string $label): void
     {
-        $asked = [];
-
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createMock(NotificationRepositoryInterface::class);
-        $notificationRepository->expects($this->exactly(3))->method('getDueNotifications')
-            ->willReturnCallback(static function (DateTimeImmutable $slot) use (&$asked): Collection {
-                $asked[] = $slot->format('Y-m-d H:i');
-
-                return new Collection();
-            });
+        $notificationRepository->expects($this->once())->method('getDueNotifications')
+            ->with(new DateTimeImmutable($after, new DateTimeZone('UTC')), new DateTimeImmutable('1985-10-26 01:15', new DateTimeZone('UTC')))
+            ->willReturn(new Collection());
 
         $exitCode = $this->makeCommand(null, [])->handle(
             $this->makeActiveEntityRepository(),
             $this->createStub(BinRepositoryInterface::class),
             new KnownClock(new DateTimeImmutable('1985-10-26 01:21', new DateTimeZone('UTC'))),
-            $this->makeConfig(1),
+            $this->makeConfig($catchUpHours),
             $this->createStub(NotificationDeliveryInterface::class),
             $notificationRepository,
         );
 
         self::assertSame(0, $exitCode);
-        self::assertSame(['1985-10-26 00:00', '1985-10-26 00:30', '1985-10-26 01:00'], $asked);
-        self::assertSame(['1985-10-26 00:00 to 1985-10-26 01:00: 0 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame([$label . ': 0 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
     public function testDryRunSendsOutput(): void
@@ -203,7 +209,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$notification]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -222,7 +228,7 @@ final class TriggerNotificationsTest extends TestCase
         self::assertCount(0, $this->errors);
         self::assertCount(2, $this->info);
         self::assertSame('<fg=yellow>[DRY] Would send to "04xxxxxxxx" with 2 bins (Example, Other)</>', $this->info[0]);
-        self::assertSame('[DRY] 1985-10-26 01:00: 1 due, 0 skipped, 1 would be sent.', $this->info[1]);
+        self::assertSame('[DRY] 1985-10-26 01:15: 1 due, 0 skipped, 1 would be sent.', $this->info[1]);
     }
 
     public function testFailedDeliveryFailsTheRun(): void
@@ -230,7 +236,7 @@ final class TriggerNotificationsTest extends TestCase
         $exitCode = $this->runWithDeliveries(DeliveryResult::SENT, DeliveryResult::FAILED);
 
         self::assertSame(1, $exitCode);
-        self::assertSame(['1985-10-26 01:00: 2 due, 0 skipped, 1 sent, 1 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 2 due, 0 skipped, 1 sent, 1 failed, 0 already sent, 0 in progress.'], $this->info);
         self::assertSame(['Some notifications failed. Run this command again for the same slot to retry them.'], $this->errors);
         self::assertSame([], $this->warnings);
     }
@@ -239,7 +245,8 @@ final class TriggerNotificationsTest extends TestCase
     #[DataProvider('getClockData')]
     public function testGetsTimeAndRoundsTimeAndDelivers(ClockInterface $clock, ?string $now): void
     {
-        $roundedDateTime = new DateTimeImmutable('1985-10-26 01:00:00', new DateTimeZone('UTC'));
+        $after = new DateTimeImmutable('1985-10-26 01:00:00', new DateTimeZone('UTC'));
+        $dueAt = new DateTimeImmutable('1985-10-26 01:15:00', new DateTimeZone('UTC'));
         $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
         $binCollection = new Collection([
             new Bin()->setAttribute('id', 1),
@@ -249,19 +256,19 @@ final class TriggerNotificationsTest extends TestCase
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createMock(NotificationRepositoryInterface::class);
         $notificationRepository->expects($this->once())->method('getDueNotifications')
-            ->with($roundedDateTime)
-            ->willReturn(new Collection([$notification]));
+            ->with($after, $dueAt)
+            ->willReturn($this->makeDue($notification, $dueAt));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createMock(BinRepositoryInterface::class);
         $binRepository->expects($this->once())->method('getBinsForNotification')
-            ->with($notification, $roundedDateTime)
+            ->with($notification, $dueAt)
             ->willReturn($binCollection);
 
         /** @var \App\Services\Notifications\Interfaces\NotificationDeliveryInterface&\PHPUnit\Framework\MockObject\MockObject $delivery */
         $delivery = $this->createMock(NotificationDeliveryInterface::class);
         $delivery->expects($this->once())->method('deliver')
-            ->with($notification, $binCollection, $roundedDateTime)
+            ->with($notification, $binCollection, $dueAt)
             ->willReturn(DeliveryResult::SENT);
 
         $exitCode = $this->makeCommand($now, [])->handle(
@@ -275,7 +282,7 @@ final class TriggerNotificationsTest extends TestCase
 
         self::assertSame(0, $exitCode);
         self::assertCount(0, $this->errors);
-        self::assertSame(['1985-10-26 01:00: 1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 1 due, 0 skipped, 1 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
     public function testInactiveBinsAreLeftOutOfTheNotification(): void
@@ -286,7 +293,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$notification]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -314,7 +321,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$notification]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
 
         $exitCode = $this->makeCommand(null, [])->handle(
             $this->makeActiveEntityRepository(notificationIds: []),
@@ -333,7 +340,7 @@ final class TriggerNotificationsTest extends TestCase
         $exitCode = $this->runWithDeliveries(DeliveryResult::IN_PROGRESS);
 
         self::assertSame(0, $exitCode);
-        self::assertSame(['1985-10-26 01:00: 1 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 1 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 1 due, 0 skipped, 0 sent, 0 failed, 0 already sent, 1 in progress.'], $this->info);
         self::assertCount(1, $this->warnings);
         self::assertStringContainsString('notification_logs', $this->warnings[0]);
         self::assertSame([], $this->errors);
@@ -362,7 +369,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$notification]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -387,7 +394,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$notification]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -415,7 +422,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn(new Collection([$changedAfter, $changedBefore, $neverChanged]));
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($changedAfter, $changedBefore, $neverChanged));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);
@@ -436,7 +443,7 @@ final class TriggerNotificationsTest extends TestCase
             $notificationRepository,
         );
 
-        self::assertSame(['1985-10-26 01:00: 3 due, 1 skipped, 2 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 3 due, 1 skipped, 2 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
     public function testReportsEachOutcomeSeparately(): void
@@ -449,7 +456,7 @@ final class TriggerNotificationsTest extends TestCase
         );
 
         self::assertSame(0, $exitCode);
-        self::assertSame(['1985-10-26 01:00: 4 due, 0 skipped, 2 sent, 0 failed, 1 already sent, 1 in progress.'], $this->info);
+        self::assertSame(['1985-10-26 01:15: 4 due, 0 skipped, 2 sent, 0 failed, 1 already sent, 1 in progress.'], $this->info);
     }
 
     /**
@@ -543,6 +550,25 @@ final class TriggerNotificationsTest extends TestCase
         return new Repository(['notifications' => ['catch_up_hours' => $catchUpHours]]);
     }
 
+    /** @return \Illuminate\Support\Collection<int, DueNotification> */
+    private function makeDue(Notification $first, DateTimeImmutable|Notification ...$rest): Collection
+    {
+        $dueAt = new DateTimeImmutable('1985-10-26 01:00', new DateTimeZone('UTC'));
+        $notifications = [$first];
+
+        foreach ($rest as $item) {
+            if ($item instanceof DateTimeImmutable) {
+                $dueAt = $item;
+
+                continue;
+            }
+
+            $notifications[] = $item;
+        }
+
+        return new Collection(\array_map(static fn (Notification $notification): DueNotification => new DueNotification($notification, $dueAt), $notifications));
+    }
+
     /**
      * @template T of object
      * @param class-string<T> $originalClassName
@@ -570,7 +596,7 @@ final class TriggerNotificationsTest extends TestCase
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
-        $notificationRepository->method('getDueNotifications')->willReturn($notifications);
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue(...$notifications->all()));
 
         /** @var \App\Repositories\Interfaces\BinRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $binRepository */
         $binRepository = $this->createStub(BinRepositoryInterface::class);

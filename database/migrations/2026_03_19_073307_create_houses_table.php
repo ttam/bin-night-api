@@ -20,8 +20,8 @@ return new class() extends Migration {
             $table->string('name');
             $table->enum('bin_night', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
             $table->string('timezone')->default('Australia/Melbourne');
-            $table->timestamps();
-            $table->softDeletes();
+            $table->dateTimes();
+            $table->softDeletesDatetime();
 
             $table->unique(['user_id', 'name']);
         });

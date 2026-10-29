@@ -14,13 +14,18 @@ return new class() extends Migration {
     {
         Schema::create('users', static function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->string('external_id', 64)->unique();
+            $externalId = $table->string('external_id', 64)->unique();
+
+            if (Schema::getConnection()->getDriverName() === 'mysql') {
+                $externalId->collation('utf8mb4_bin');
+            }
+
             $table->string('name')->nullable();
             $table->string('email')->nullable();
-            $table->timestamp('email_verified_at')->nullable();
+            $table->dateTime('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->rememberToken();
-            $table->timestamps();
+            $table->dateTimes();
         });
 
         Schema::create('password_reset_tokens', static function (Blueprint $table): void {

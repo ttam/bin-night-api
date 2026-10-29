@@ -23,8 +23,8 @@ return new class() extends Migration {
             $table->string('target');
             $table->integer('lead_days')->default(0);
             $table->time('send_time');
-            $table->timestamps();
-            $table->softDeletes();
+            $table->dateTimes();
+            $table->softDeletesDatetime();
 
             $table->unique(['house_id', 'name']);
         });

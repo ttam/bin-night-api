@@ -17,7 +17,7 @@ final class NotificationsTest extends ApiTestCase
             ->assertCreated()
             ->assertJsonPath('data.active', true)
             ->assertJsonPath('data.name', 'Marty\'s Phone')
-            ->assertJsonPath('data.send_time', '18:30')
+            ->assertJsonPath('data.send_time', '18:30:00')
             ->assertJsonPath('data.target', '+61400000000')
             ->assertJsonPath('data.type', 'sms');
 
@@ -80,9 +80,9 @@ final class NotificationsTest extends ApiTestCase
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
 
-        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'send_time' => '18:15'])
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'send_time' => '18:15:00'])
             ->assertUnprocessable()
-            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00 or 18:30.');
+            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.');
 
         self::assertSame(0, DB::table('notifications')->count());
     }
@@ -94,6 +94,17 @@ final class NotificationsTest extends ApiTestCase
         $this->postJson('/api/v1/notifications', ['house_id' => $houseId])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['lead_days', 'name', 'send_time', 'target', 'type']);
+    }
+
+    public function testCreateRequiresTheSecondsInASendTime(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'send_time' => '18:30'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.');
+
+        self::assertSame(0, DB::table('notifications')->count());
     }
 
     public function testCreateWithoutAHouseIsNotFound(): void
@@ -175,19 +186,40 @@ final class NotificationsTest extends ApiTestCase
         self::assertFalse($notifications['+61400000001']['active']);
     }
 
+    public function testListShowsTheSendTimeWithSeconds(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+
+        // The same on every database: MySQL pads a time out to HH:MM:SS, and SQLite keeps what it was given.
+        $this->getJson('/api/v1/notifications')->assertOk()->assertJsonPath('data.0.send_time', '18:30:00');
+    }
+
     public function testUpdateChangesTheNotification(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
         $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
 
-        $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 3, 'send_time' => '07:00'])
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 3, 'send_time' => '07:00:00'])
             ->assertOk()
             ->assertJsonPath('data.active', true)
             ->assertJsonPath('data.lead_days', 3)
-            ->assertJsonPath('data.send_time', '07:00')
+            ->assertJsonPath('data.send_time', '07:00:00')
             ->assertJsonPath('data.target', '+61400000000');
 
         self::assertSame(3, DB::table('notifications')->where('id', $notificationId)->value('lead_days'));
+    }
+
+    public function testUpdateChangesTheSendTime(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['send_time' => '07:30:00'])
+            ->assertOk()
+            ->assertJsonPath('data.send_time', '07:30:00');
+
+        self::assertSame('07:30:00', DB::table('notifications')->where('id', $notificationId)->value('send_time'));
     }
 
     public function testUpdateChecksTheTargetAgainstTheStoredType(): void
@@ -243,11 +275,11 @@ final class NotificationsTest extends ApiTestCase
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
         $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
 
-        $this->patchJson('/api/v1/notifications/' . $notificationId, ['send_time' => '07:45'])
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['send_time' => '07:45:00'])
             ->assertUnprocessable()
-            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00 or 18:30.');
+            ->assertJsonPath('errors.send_time.0', 'The send time must be on the hour or half hour, like 18:00:00 or 18:30:00.');
 
-        self::assertSame('18:30', DB::table('notifications')->where('id', $notificationId)->value('send_time'));
+        self::assertSame('18:30:00', DB::table('notifications')->where('id', $notificationId)->value('send_time'));
     }
 
     public function testUpdateRejectsInvalidInput(): void
@@ -255,7 +287,7 @@ final class NotificationsTest extends ApiTestCase
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
         $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
 
-        $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 8, 'send_time' => '11:21', 'type' => 'carrier-pigeon'])
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 8, 'send_time' => '11:21:00', 'type' => 'carrier-pigeon'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['lead_days', 'send_time', 'type']);
     }
@@ -284,7 +316,7 @@ final class NotificationsTest extends ApiTestCase
             'house_id' => $houseId,
             'lead_days' => 1,
             'name' => 'Marty\'s Phone',
-            'send_time' => '18:30',
+            'send_time' => '18:30:00',
             'target' => '+61400000000',
             'type' => 'sms',
         ];

@@ -24,8 +24,8 @@ return new class() extends Migration {
             $table->date('start_date');
             $table->string('lid_color', 6)->nullable();
             $table->string('bin_color', 6)->nullable();
-            $table->timestamps();
-            $table->softDeletes();
+            $table->dateTimes();
+            $table->softDeletesDatetime();
 
             $table->unique(['house_id', 'name']);
         });

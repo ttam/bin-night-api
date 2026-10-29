@@ -19,7 +19,7 @@ final class UpdateNotificationTest extends TestCase
         $validator->method('validated')->willReturn([
             'lead_days' => '2',
             'name' => 'Marty\'s Phone',
-            'send_time' => '18:30',
+            'send_time' => '18:30:00',
             'target' => '+61400000000',
             'type' => NotificationType::SMS->value,
         ]);
@@ -29,7 +29,7 @@ final class UpdateNotificationTest extends TestCase
         self::assertSame([
             'lead_days' => 2,
             'name' => 'Marty\'s Phone',
-            'send_time' => '18:30',
+            'send_time' => '18:30:00',
             'target' => '+61400000000',
             'type' => 'sms',
         ], UpdateNotification::fromRequest($request)->toDatabaseArray());
@@ -50,13 +50,13 @@ final class UpdateNotificationTest extends TestCase
         $array = new UpdateNotification([
             'lead_days' => 2,
             'name' => 'Marty\'s Phone',
-            'send_time' => '18:30',
+            'send_time' => '18:30:00',
             'target' => '+61400000000',
             'type' => NotificationType::SMS,
         ])->toDatabaseArray();
 
         self::assertSame(2, $array['lead_days']);
-        self::assertSame('18:30', $array['send_time']);
+        self::assertSame('18:30:00', $array['send_time']);
         self::assertSame('+61400000000', $array['target']);
         self::assertSame('sms', $array['type']);
     }

@@ -19,9 +19,9 @@ return new class() extends Migration {
             $table->foreignUuid('notification_id')->constrained()->cascadeOnDelete();
             $table->dateTime('scheduled_for');
             $table->string('status');
-            $table->timestamp('sent_at')->nullable();
+            $table->dateTime('sent_at')->nullable();
             $table->string('failure_reason')->nullable();
-            $table->timestamps();
+            $table->dateTimes();
 
             $table->unique(['notification_id', 'scheduled_for']);
         });

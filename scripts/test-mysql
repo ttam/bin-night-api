@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# Runs the feature tests against a real MySQL 8.0 in Docker, as production does, instead of the in-memory SQLite that
+# the rest of the tests use. Any arguments are passed on to `php artisan test`.
+#
+#   composer test:mysql
+#   composer test:mysql -- --filter=NotificationsTest
+#
+# MYSQL_IMAGE and MYSQL_TEST_PORT can be set to change the server version and the local port.
+#
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+image="${MYSQL_IMAGE:-mysql:8.0.42}"
+port="${MYSQL_TEST_PORT:-33061}"
+name="binnight-mysql-test"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker is needed to run MySQL for these tests." >&2
+    exit 1
+fi
+
+docker rm -f "$name" >/dev/null 2>&1 || true
+trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+
+# MYSQL_INITDB_SKIP_TZINFO leaves MySQL's timezone tables empty, as they are on a stock server, so these tests also
+# prove that nothing depends on them.
+docker run -d --rm --name "$name" \
+    -e MYSQL_ALLOW_EMPTY_PASSWORD=yes \
+    -e MYSQL_DATABASE=binnight_test \
+    -e MYSQL_INITDB_SKIP_TZINFO=1 \
+    -p "127.0.0.1:${port}:3306" \
+    "$image" >/dev/null
+
+echo "Waiting for MySQL ($image)..."
+for attempt in $(seq 1 90); do
+    if docker exec "$name" mysqladmin ping -h 127.0.0.1 -uroot --silent >/dev/null 2>&1; then
+        break
+    fi
+
+    if [ "$attempt" -eq 90 ]; then
+        echo "MySQL did not start." >&2
+        docker logs "$name" 2>&1 | tail -20 >&2
+        exit 1
+    fi
+
+    sleep 1
+done
+
+docker exec "$name" mysql -h 127.0.0.1 -uroot -N -e \
+    "SELECT CONCAT('MySQL ', VERSION(), ', timezone tables loaded: ', COUNT(*)) FROM mysql.time_zone_name"
+
+DB_CONNECTION=mysql \
+DB_HOST=127.0.0.1 \
+DB_PORT="$port" \
+DB_DATABASE=binnight_test \
+DB_USERNAME=root \
+DB_PASSWORD= \
+DB_URL= \
+    php artisan test tests/Feature "$@"

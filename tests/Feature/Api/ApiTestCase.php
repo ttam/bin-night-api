@@ -81,7 +81,7 @@ abstract class ApiTestCase extends TestCase
             'type' => 'sms',
             'target' => $target,
             'lead_days' => 1,
-            'send_time' => '18:30',
+            'send_time' => '18:30:00',
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ]);

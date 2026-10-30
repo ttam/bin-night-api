@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\Plan;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -15,6 +16,7 @@ final class UserSeeder extends Seeder
             'email' => 'admin@binnight.app',
             'name' => 'Admin',
             'password' => \bcrypt('admin'),
+            'plan' => Plan::UNLIMITED->value,
         ]);
     }
 }

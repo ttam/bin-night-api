@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\Bins;
 use App\Http\Controllers\Api\Houses;
+use App\Http\Controllers\Api\Me;
 use App\Http\Controllers\Api\Notifications;
 use Illuminate\Contracts\Routing\Registrar;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,8 @@ Route::prefix('v1')->group(static function (Registrar $route): void {
         $route->post('houses', Houses\CreateController::class)->middleware('can:create,house');
         $route->patch('houses/{house}', Houses\UpdateController::class)->middleware('can:update,house,house')->whereUuid('house');
         $route->delete('houses/{house}', Houses\DeleteController::class)->middleware('can:delete,house,house')->whereUuid('house');
+
+        $route->get('me', Me\ShowController::class);
 
         $route->get('notifications', Notifications\ListController::class);
         $route->post('notifications', Notifications\CreateController::class)->middleware('can:create,notification,house_id,type');

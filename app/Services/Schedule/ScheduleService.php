@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Schedule;
 
-use App\Enums\Cycle;
 use App\Models\Bin;
 use App\Models\Notification;
 use App\Services\Schedule\Interfaces\ScheduleServiceInterface;
@@ -66,13 +65,11 @@ final class ScheduleService implements ScheduleServiceInterface
             return false;
         }
 
-        return match ($bin->cycle) {
-            Cycle::FORTNIGHTLY => Calendar::daysBetween($first, $date) % 14 === 0,
+        $weeks = $bin->cycle->weeks();
 
-            Cycle::MONTHLY => Calendar::weekOfMonth($first) === Calendar::weekOfMonth($date),
-
-            Cycle::WEEKLY => true,
-        };
+        return $weeks === null
+            ? Calendar::weekOfMonth($first) === Calendar::weekOfMonth($date)
+            : Calendar::daysBetween($first, $date) % (7 * $weeks) === 0;
     }
 
     /** The first bin night on or after the start date. */

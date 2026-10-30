@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Enums\Cycle;
 use App\Services\Clock\KnownClock;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -187,10 +188,10 @@ final class BinsTest extends ApiTestCase
         $binId = $this->createBin($houseId, 'Rubbish', '1955-11-12 06:00:00');
         $this->givenTheTimeIs('1985-10-24 20:00:00');
 
-        foreach (['fortnightly', 'monthly', 'weekly'] as $cycle) {
-            $this->patchJson('/api/v1/bins/' . $binId, ['cycle' => $cycle])
+        foreach (Cycle::cases() as $cycle) {
+            $this->patchJson('/api/v1/bins/' . $binId, ['cycle' => $cycle->value])
                 ->assertOk()
-                ->assertJsonPath('data.cycle', $cycle)
+                ->assertJsonPath('data.cycle', $cycle->value)
                 ->assertJsonPath('data.start_date', '1985-10-26');
         }
     }

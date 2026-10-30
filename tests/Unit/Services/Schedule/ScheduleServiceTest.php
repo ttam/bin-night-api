@@ -97,6 +97,15 @@ final class ScheduleServiceTest extends TestCase
         self::assertSame($expected, $this->sequence($bin, '1985-10-01 00:00', 7, $timezone));
     }
 
+    public function testComputeNextBinNightForAFourWeeklyBinGoesOutEveryTwentyEightDaysFromItsFirstCollection(): void
+    {
+        $house = $this->house('wednesday', 'Australia/Melbourne');
+
+        // A Thursday start is followed by Wednesday the 13th, then every 28 days, which drifts through the weeks of the month.
+        self::assertSame(['1985-11-13', '1985-12-11', '1986-01-08', '1986-02-05', '1986-03-05'], $this->sequence($this->bin(Cycle::FOUR_WEEKLY, '1985-11-07', $house), '1985-10-01 00:00', 5));
+        self::assertSame(['1985-11-06', '1985-12-04', '1986-01-01', '1986-01-29', '1986-02-26'], $this->sequence($this->bin(Cycle::FOUR_WEEKLY, '1985-11-06', $house), '1985-10-01 00:00', 5));
+    }
+
     public function testComputeNextBinNightForAMonthlyBinInTheFifthWeekSkipsMonthsWithoutOne(): void
     {
         $bin = $this->bin(Cycle::MONTHLY, '1985-10-30', $this->house('wednesday', 'Australia/Melbourne'));
@@ -143,6 +152,7 @@ final class ScheduleServiceTest extends TestCase
         self::assertSame('1985-11-06', $this->next($this->bin(Cycle::WEEKLY, '1985-11-06', $house), '1985-10-01 10:00'));
         self::assertSame('1985-10-02', $this->next($this->bin(Cycle::MONTHLY, '1985-10-02', $house), '1985-09-01 10:00'));
         self::assertSame('1985-11-13', $this->next($this->bin(Cycle::FORTNIGHTLY, '1985-11-08', $house), '1985-10-01 10:00'));
+        self::assertSame('1985-11-13', $this->next($this->bin(Cycle::FOUR_WEEKLY, '1985-11-08', $house), '1985-10-01 10:00'));
     }
 
     #[DataProvider('getTimezones')]

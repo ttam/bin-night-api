@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\Cycle;
 use App\Models\Bin;
 use App\Models\House;
 use App\Models\User;
@@ -20,24 +21,31 @@ final class BinSeeder extends Seeder
         $bins = [
             [
                 'name' => 'Rubbish',
-                'cycle' => 'weekly',
+                'cycle' => Cycle::WEEKLY->value,
                 'start_date' => '2026-03-25',
-                'lid_color' => '00dd00',
-                'bin_color' => '00dd00',
+                'lid_color' => 'bf001f',
+                'bin_color' => '47654e',
             ],
             [
                 'name' => 'Recycling',
-                'cycle' => 'fortnightly',
+                'cycle' => Cycle::FORTNIGHTLY->value,
                 'start_date' => '2026-04-01',
-                'lid_color' => 'ffff00',
-                'bin_color' => '0000ff',
+                'lid_color' => 'ffc700',
+                'bin_color' => '0054a9',
             ],
             [
                 'name' => 'Food & Garden',
-                'cycle' => 'fortnightly',
+                'cycle' => Cycle::FORTNIGHTLY->value,
                 'start_date' => '2026-03-25',
-                'lid_color' => 'dd0000',
-                'bin_color' => '00dd00',
+                'lid_color' => '00cb7f',
+                'bin_color' => '7c313a',
+            ],
+            [
+                'name' => 'Glass',
+                'cycle' => Cycle::FOUR_WEEKLY->value,
+                'start_date' => '2026-03-25',
+                'lid_color' => '7432b8',
+                'bin_color' => '445348',
             ],
         ];
 

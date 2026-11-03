@@ -12,10 +12,12 @@ use App\Repositories\Interfaces\BinRepositoryInterface;
 use App\Repositories\Interfaces\HouseRepositoryInterface;
 use App\Repositories\Interfaces\NotificationLogRepositoryInterface;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
+use App\Repositories\Interfaces\PhoneNumberRepositoryInterface;
 use App\Repositories\Interfaces\PlanRepositoryInterface;
 use App\Repositories\Interfaces\UserRepositoryInterface;
 use App\Repositories\NotificationLogRepository;
 use App\Repositories\NotificationRepository;
+use App\Repositories\PhoneNumberRepository;
 use App\Repositories\PlanRepository;
 use App\Repositories\ScheduledBinRepository;
 use App\Repositories\UserRepository;
@@ -40,6 +42,7 @@ final class RepositoryServiceProvider extends ServiceProvider
         $this->app->singleton(HouseRepositoryInterface::class, HouseRepository::class);
         $this->app->singleton(NotificationLogRepositoryInterface::class, NotificationLogRepository::class);
         $this->app->singleton(NotificationRepositoryInterface::class, NotificationRepository::class);
+        $this->app->singleton(PhoneNumberRepositoryInterface::class, PhoneNumberRepository::class);
         $this->app->singleton(PlanRepositoryInterface::class, PlanRepository::class);
         $this->app->singleton(UserRepositoryInterface::class, UserRepository::class);
     }

@@ -19,6 +19,7 @@ final class Authorize extends Middleware
         'bin' => Models\Bin::class,
         'house' => Models\House::class,
         'notification' => Models\Notification::class,
+        'phoneNumber' => Models\PhoneNumber::class,
     ];
 
     /** @var array<string, class-string<Models\Model>> */

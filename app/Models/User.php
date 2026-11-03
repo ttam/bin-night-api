@@ -39,6 +39,12 @@ class User extends Authenticatable
         return $this->hasMany(House::class);
     }
 
+    /** @return HasMany<PhoneNumber, $this> */
+    public function phoneNumbers(): HasMany
+    {
+        return $this->hasMany(PhoneNumber::class);
+    }
+
     /** @return HasMany<Notification, $this> */
     public function notifications(): HasMany
     {

@@ -41,5 +41,6 @@ return [
         'phone_number' => \env('TWILIO_PHONE_NUMBER'),
         'sid' => \env('TWILIO_SID'),
         'secret' => \env('TWILIO_SECRET'),
+        'verify_sid' => \env('TWILIO_VERIFY_SID'),
     ],
 ];

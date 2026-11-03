@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Bins;
 use App\Http\Controllers\Api\Houses;
 use App\Http\Controllers\Api\Me;
 use App\Http\Controllers\Api\Notifications;
+use App\Http\Controllers\Api\Schedule;
 use Illuminate\Contracts\Routing\Registrar;
 use Illuminate\Support\Facades\Route;
 
@@ -27,5 +28,7 @@ Route::prefix('v1')->group(static function (Registrar $route): void {
         $route->post('notifications', Notifications\CreateController::class)->middleware('can:create,notification,house_id,type');
         $route->patch('notifications/{notification}', Notifications\UpdateController::class)->middleware('can:update,notification,notification,type')->whereUuid('notification');
         $route->delete('notifications/{notification}', Notifications\DeleteController::class)->middleware('can:delete,notification,notification')->whereUuid('notification');
+
+        $route->get('schedule', Schedule\ShowController::class);
     });
 });

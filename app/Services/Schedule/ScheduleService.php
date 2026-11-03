@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Schedule;
 
+use App\DTO\Schedule\UpcomingCollection;
 use App\Models\Bin;
+use App\Models\House;
 use App\Models\Notification;
 use App\Services\Schedule\Interfaces\ScheduleServiceInterface;
 use DateTimeImmutable;
@@ -52,6 +54,30 @@ final class ScheduleService implements ScheduleServiceInterface
         return $bins->filter(fn (Bin $bin): bool => $this->isCollectedOn($bin, $pickupDate))->values();
     }
 
+    /** @inheritDoc */
+    public function getUpcomingCollections(House $house, Collection $bins, DateTimeInterface $now, int $weeks): array
+    {
+        $bins->each(static fn (Bin $bin): Bin => $bin->setRelation('house', $house));
+
+        $date = $this->onOrAfterBinNight(
+            $house->binNight,
+            DateTimeImmutable::createFromInterface($now)->setTimezone($house->timezone)->setTime(12, 0),
+        );
+        $collections = [];
+
+        for ($week = 0; $week < $weeks; $week++) {
+            $due = $bins->filter(fn (Bin $bin): bool => $this->isCollectedOn($bin, $date))->values();
+
+            if ($due->isNotEmpty()) {
+                $collections[] = new UpcomingCollection($date->setTime(0, 0), $house, $due);
+            }
+
+            $date = $date->modify('+7 days');
+        }
+
+        return $collections;
+    }
+
     /** Whether the bin goes out on the day $date falls on, in the house's timezone. */
     private function isCollectedOn(Bin $bin, DateTimeImmutable $date): bool
     {
@@ -75,9 +101,13 @@ final class ScheduleService implements ScheduleServiceInterface
     /** The first bin night on or after the start date. */
     private function firstCollection(Bin $bin): DateTimeImmutable
     {
-        $date = $this->startDate($bin);
+        return $this->onOrAfterBinNight($bin->house->binNight, $this->startDate($bin));
+    }
 
-        for ($days = 0; $days < 7 && $bin->house->binNight !== \strtolower($date->format('l')); $days++) {
+    /** The first day on or after $date that is a $binNight (a lower case weekday); $date itself if there is none. */
+    private function onOrAfterBinNight(string $binNight, DateTimeImmutable $date): DateTimeImmutable
+    {
+        for ($days = 0; $days < 7 && $binNight !== \strtolower($date->format('l')); $days++) {
             $date = $date->modify('+1 day');
         }
 

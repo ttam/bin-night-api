@@ -184,6 +184,94 @@ final class ScheduleServiceTest extends TestCase
         self::assertNull(new ScheduleService()->computeNextBinNight($bin, new DateTimeImmutable('1985-10-21')));
     }
 
+    public function testGetUpcomingCollectionsIncludesTodayWhenItIsBinNight(): void
+    {
+        $bins = new Collection([$this->bin(Cycle::WEEKLY, '1985-10-02', $this->house('wednesday', 'Australia/Melbourne'))]);
+
+        self::assertSame(['1985-10-23'], \array_keys($this->upcoming($bins, '1985-10-23 20:00', 1, 'Australia/Melbourne')));
+        self::assertSame(['1985-10-30'], \array_keys($this->upcoming($bins, '1985-10-24 08:00', 1, 'Australia/Melbourne')));
+    }
+
+    public function testGetUpcomingCollectionsIsEmptyWhenNothingGoesOut(): void
+    {
+        $house = $this->house('wednesday', 'Australia/Melbourne');
+
+        self::assertSame([], $this->upcoming(new Collection(), '1985-10-21 10:00', 4, 'Australia/Melbourne', $house));
+        self::assertSame([], $this->upcoming(new Collection([$this->bin(Cycle::WEEKLY, '1985-10-02', $this->house('invalid', 'Australia/Melbourne'))]), '1985-10-21 10:00', 4, 'Australia/Melbourne', $this->house('invalid', 'Australia/Melbourne')));
+    }
+
+    public function testGetUpcomingCollectionsLeavesOutBinNightsWithNothingGoingOut(): void
+    {
+        $bins = new Collection([$this->bin(Cycle::FORTNIGHTLY, '1985-10-02', $this->house('wednesday', 'Australia/Melbourne'))]);
+
+        // Collections are on 2 October, 16 October, 30 October and 13 November, so a look from the 21st finds two in four weeks.
+        self::assertSame(['1985-10-30', '1985-11-13'], \array_keys($this->upcoming($bins, '1985-10-21 10:00', 4, 'Australia/Melbourne')));
+    }
+
+    public function testGetUpcomingCollectionsNeverGoesBeforeAStartDate(): void
+    {
+        $bins = new Collection([$this->bin(Cycle::WEEKLY, '1985-11-06', $this->house('wednesday', 'Australia/Melbourne'))]);
+
+        self::assertSame(['1985-11-06', '1985-11-13'], \array_keys($this->upcoming($bins, '1985-10-21 10:00', 4, 'Australia/Melbourne')));
+    }
+
+    public function testGetUpcomingCollectionsRepeatsEveryFourWeeksForRubbishRecyclingGardenAndGlass(): void
+    {
+        $house = $this->house('wednesday', 'Australia/Melbourne');
+        $bins = new Collection([
+            $this->bin(Cycle::WEEKLY, '1985-10-02', $house)->setAttribute('name', 'Rubbish'),
+            $this->bin(Cycle::FORTNIGHTLY, '1985-10-02', $house)->setAttribute('name', 'Recycling'),
+            // Garden waste alternates with recycling, and glass goes out with every second garden waste.
+            $this->bin(Cycle::FORTNIGHTLY, '1985-10-09', $house)->setAttribute('name', 'Garden'),
+            $this->bin(Cycle::FOUR_WEEKLY, '1985-10-09', $house)->setAttribute('name', 'Glass'),
+        ]);
+
+        $fourWeeks = [
+            '1985-10-23' => ['Rubbish', 'Garden'],
+            '1985-10-30' => ['Rubbish', 'Recycling'],
+            '1985-11-06' => ['Rubbish', 'Garden', 'Glass'],
+            '1985-11-13' => ['Rubbish', 'Recycling'],
+        ];
+
+        self::assertSame($fourWeeks, $this->upcoming($bins, '1985-10-21 10:00', 4, 'Australia/Melbourne'));
+
+        // The pattern repeats: the next four weeks are the same, four weeks on.
+        self::assertSame([...$fourWeeks, ...[
+            '1985-11-20' => ['Rubbish', 'Garden'],
+            '1985-11-27' => ['Rubbish', 'Recycling'],
+            '1985-12-04' => ['Rubbish', 'Garden', 'Glass'],
+            '1985-12-11' => ['Rubbish', 'Recycling'],
+        ]], $this->upcoming($bins, '1985-10-21 10:00', 8, 'Australia/Melbourne'));
+    }
+
+    #[DataProvider('getTimezones')]
+    public function testGetUpcomingCollectionsStepsExactlyAWeekAcrossClockChanges(string $timezone): void
+    {
+        $bins = new Collection([$this->bin(Cycle::WEEKLY, '1985-10-02', $this->house('wednesday', $timezone))]);
+
+        $dates = \array_keys($this->upcoming($bins, '1985-10-21 10:00', 12, $timezone));
+
+        self::assertCount(12, $dates);
+
+        foreach ($dates as $i => $date) {
+            self::assertSame('Wednesday', new DateTimeImmutable($date)->format('l'), $timezone);
+
+            if ($i > 0) {
+                self::assertSame(7, \intval(new DateTimeImmutable($dates[$i - 1])->diff(new DateTimeImmutable($date))->days), $timezone);
+            }
+        }
+    }
+
+    public function testGetUpcomingCollectionsUsesTheHousesDateRatherThanUtcs(): void
+    {
+        // 20:00 UTC on Wednesday the 23rd is already Thursday morning in Melbourne, and still Wednesday afternoon in Los Angeles.
+        $melbourne = new Collection([$this->bin(Cycle::WEEKLY, '1985-10-02', $this->house('wednesday', 'Australia/Melbourne'))]);
+        $losAngeles = new Collection([$this->bin(Cycle::WEEKLY, '1985-10-02', $this->house('wednesday', 'America/Los_Angeles'))]);
+
+        self::assertSame(['1985-10-30'], \array_keys($this->upcoming($melbourne, '1985-10-23 20:00', 1, 'UTC', $this->house('wednesday', 'Australia/Melbourne'))));
+        self::assertSame(['1985-10-23'], \array_keys($this->upcoming($losAngeles, '1985-10-23 20:00', 1, 'UTC', $this->house('wednesday', 'America/Los_Angeles'))));
+    }
+
     private function bin(Cycle $cycle, string $startDate, House $house): Bin
     {
         $bin = new Bin()
@@ -209,6 +297,25 @@ final class ScheduleServiceTest extends TestCase
     private function notification(House $house, int $leadDays): Notification
     {
         return new Notification()->setRelation('house', $house)->setAttribute('lead_days', $leadDays);
+    }
+
+    /**
+     * The bin names that go out on each date.
+     *
+     * @param \Illuminate\Support\Collection<int, \App\Models\Bin> $bins
+     *
+     * @return array<string, list<string>>
+     */
+    private function upcoming(Collection $bins, string $now, int $weeks, string $timezone, ?House $house = null): array
+    {
+        $house ??= $bins->first()?->house ?? throw new \LogicException('A house is needed when there are no bins.');
+        $names = [];
+
+        foreach (new ScheduleService()->getUpcomingCollections($house, $bins, new DateTimeImmutable($now, new DateTimeZone($timezone)), $weeks) as $collection) {
+            $names[$collection->date->format('Y-m-d')] = $collection->bins->map(static fn (Bin $bin): string => \strval($bin->getAttribute('name')))->all();
+        }
+
+        return $names;
     }
 
     /** @return list<string> */

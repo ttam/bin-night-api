@@ -27,8 +27,8 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
         $notification = new Notification()->fill([
             'lead_days' => $data->leadDays,
             'name' => $data->name,
+            'phone_number_id' => $data->phoneNumberId,
             'send_time' => $data->sendTime,
-            'target' => $data->target,
             'type' => $data->type->value,
         ]);
 
@@ -36,7 +36,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
         $notification->setAttribute('user_id', $userId);
         $notification->save();
 
-        return $notification;
+        return $notification->load('phoneNumber');
     }
 
     public function deleteNotification(Notification $notification): void
@@ -58,6 +58,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
             ->select('notifications.*', 'users.external_id as user_external_id', 'houses.timezone as house_timezone')
             ->join('houses', 'notifications.house_id', '=', 'houses.id')
             ->join('users', 'notifications.user_id', '=', 'users.id')
+            ->with('phoneNumber')
             ->get();
 
         $sent = $this->sentBetween($after, $until);
@@ -96,6 +97,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
             ->select('notifications.*')
             ->join('users', 'users.id', '=', 'notifications.user_id')
             ->where('users.external_id', '=', $user->id)
+            ->with('phoneNumber')
             ->get();
     }
 
@@ -103,7 +105,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
     {
         $notification->fill($data->toDatabaseArray())->save();
 
-        return $notification;
+        return $notification->load('phoneNumber');
     }
 
     private function key(Notification $notification, DateTimeImmutable $dueAt): string

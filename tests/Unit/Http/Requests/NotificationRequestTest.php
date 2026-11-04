@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Requests;
 
-use App\Enums\NotificationType;
 use App\Http\Requests\Notification\AbstractNotificationRequest;
 use App\Http\Requests\Notification\CreateNotificationRequest;
 use App\Http\Requests\Notification\UpdateNotificationRequest;
 use App\Models\House;
 use App\Models\Notification;
+use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as DB;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -29,7 +30,17 @@ final class NotificationRequestTest extends TestCase
     {
         $this->bootEloquent()->migrate();
 
+        // The mobile number rule reads its patterns from config.
+        $container = new Container();
+        $container->instance('config', new Repository(['phone' => ['mobile_patterns' => ['AU' => '/^\+614\d{8}$/']]]));
+        Container::setInstance($container);
+
         DB::table('houses')->insert(['id' => self::HOUSE_ID]);
+    }
+
+    protected function tearDown(): void
+    {
+        Container::setInstance(null);
     }
 
     public static function getBadLeadDays(): iterable
@@ -64,31 +75,6 @@ final class NotificationRequestTest extends TestCase
         yield 'Seconds without the minutes' => ['18::00'];
     }
 
-    public static function getBadSmsTargets(): iterable
-    {
-        yield 'Local format' => ['0400000000'];
-
-        yield 'Not a number' => ['example'];
-
-        yield 'Starts with zero' => ['+0400000000'];
-
-        yield 'Too short' => ['+6140'];
-    }
-
-    /** Adding a notification type breaks this until the type says what a good and a bad target look like. */
-    public static function getTargetExamples(): iterable
-    {
-        foreach (NotificationType::cases() as $type) {
-            yield $type->name => [$type, ...match ($type) {
-                NotificationType::SMS => [
-                    '+61400000000',
-                    '0400000000',
-                    'The target must be an international phone number, like +61400000000.',
-                ],
-            }];
-        }
-    }
-
     public function testAuthorize(): void
     {
         $request = new class() extends AbstractNotificationRequest {
@@ -104,21 +90,6 @@ final class NotificationRequestTest extends TestCase
         DB::table('notifications')->insert(['id' => 'n1', 'house_id' => '11111111-1111-1111-1111-111111111111', 'name' => 'Marty\'s Phone']);
 
         self::assertTrue($this->validate([])->passes());
-    }
-
-    #[DataProvider('getTargetExamples')]
-    public function testCreateRequestChecksTheTargetFormatOfEveryType(
-        NotificationType $type,
-        string $valid,
-        string $invalid,
-        string $message,
-    ): void {
-        self::assertTrue($this->validate(['target' => $valid, 'type' => $type->value])->passes());
-
-        $validator = $this->validate(['target' => $invalid, 'type' => $type->value]);
-
-        self::assertFalse($validator->passes());
-        self::assertSame(['target' => [$message]], $validator->errors()->toArray());
     }
 
     public function testCreateRequestFailsWithANameAlreadyUsedInTheHouse(): void
@@ -159,15 +130,6 @@ final class NotificationRequestTest extends TestCase
         self::assertSame(['send_time'], \array_keys($validator->errors()->toArray()));
     }
 
-    #[DataProvider('getBadSmsTargets')]
-    public function testCreateRequestFailsWithInvalidSmsTarget(string $target): void
-    {
-        $validator = $this->validate(['target' => $target]);
-
-        self::assertFalse($validator->passes());
-        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
-    }
-
     public function testCreateRequestFailsWithInvalidType(): void
     {
         $validator = $this->validate(['type' => 'carrier-pigeon']);
@@ -199,7 +161,7 @@ final class NotificationRequestTest extends TestCase
 
     public function testCreateRequestRequiresAllFields(): void
     {
-        $validator = $this->getValidator([], new CreateNotificationRequest()->rules());
+        $validator = $this->getValidator([], $this->createRequest()->rules());
 
         self::assertFalse($validator->passes());
         self::assertSame(
@@ -208,20 +170,109 @@ final class NotificationRequestTest extends TestCase
         );
     }
 
-    public function testMessagesOnlyExplainTheSendTimeWithoutAType(): void
+    public function testMessagesOnlyExplainTheSendTime(): void
     {
         self::assertSame(
             [
                 'send_time.date_format' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
                 'send_time.regex' => 'The send time must be on a quarter hour, like 18:00:00 or 18:45:00.',
             ],
-            new CreateNotificationRequest()->messages(),
+            $this->createRequest()->messages(),
         );
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function getBadTargets(): iterable
+    {
+        yield 'Local format' => ['0400000000'];
+
+        yield 'Not a number' => ['example'];
+
+        yield 'A landline' => ['+61290000000'];
+
+        yield 'Another country' => ['+64211234567'];
+
+        yield 'Too short' => ['+6140'];
+
+        yield 'With spaces' => ['+61 400 000 000'];
+    }
+
+    public function testCreateRequestAcceptsAnAustralianMobile(): void
+    {
+        self::assertTrue($this->validate(['target' => '+61400000000', 'type' => 'sms'])->passes());
+    }
+
+    #[DataProvider('getBadTargets')]
+    public function testCreateRequestFailsWithAnInvalidTarget(string $target): void
+    {
+        $validator = $this->validate(['target' => $target]);
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
+    }
+
+    public function testCreateRequestExplainsAnInvalidTarget(): void
+    {
+        $validator = $this->validate(['target' => '0400000000']);
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['target' => ['The target must be an Australian mobile, like +61400000000.']], $validator->errors()->toArray());
+    }
+
+    public function testCreateRequestChecksNoTargetFormatWithoutAKnownType(): void
+    {
+        $validator = $this->validate(['target' => 'whatever', 'type' => 'carrier-pigeon']);
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['type'], \array_keys($validator->errors()->toArray()));
+    }
+
+    public function testUpdateRequestChecksTheTargetAgainstTheNotificationsOwnType(): void
+    {
+        $data = ['target' => '0400000000'];
+
+        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
+    }
+
+    public function testUpdateRequestChecksTheTargetAgainstTheNewTypeWhenItIsSent(): void
+    {
+        $data = ['target' => '0400000000', 'type' => 'sms'];
+
+        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'carrier-pigeon')->rules());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
+    }
+
+    public function testUpdateRequestExplainsTheTargetFormatOfTheNotificationsOwnType(): void
+    {
+        $data = ['target' => '0400000000'];
+        $request = $this->makeUpdateRequest($data, 'sms');
+
+        $validator = $this->getValidator($data, $request->rules(), $request->messages());
+
+        self::assertFalse($validator->passes());
+        self::assertSame(['target' => ['The target must be an Australian mobile, like +61400000000.']], $validator->errors()->toArray());
+    }
+
+    public function testUpdateRequestSkipsTheTargetFormatForOtherTypes(): void
+    {
+        $data = ['target' => 'not-a-phone-number'];
+
+        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'carrier-pigeon')->rules())->passes());
+    }
+
+    public function testUpdateRequestDoesNotAcceptAnotherNotificationsPhoneNumber(): void
+    {
+        self::assertArrayNotHasKey('phone_number_id', $this->makeUpdateRequest([], 'sms')->rules());
     }
 
     public function testSendTimeBetweenQuarterHoursGetsTheQuarterHourMessage(): void
     {
-        $request = new CreateNotificationRequest();
+        $request = $this->createRequest();
         $validator = $this->getValidator(['send_time' => '18:20:00'], ['send_time' => $request->rules()['send_time']], $request->messages());
 
         self::assertFalse($validator->passes());
@@ -231,7 +282,7 @@ final class NotificationRequestTest extends TestCase
     #[DataProvider('getBadSendTimes')]
     public function testSendTimeNotOnAQuarterHourIsExplained(string $sendTime): void
     {
-        $request = new CreateNotificationRequest();
+        $request = $this->createRequest();
         $validator = $this->getValidator(['send_time' => $sendTime], ['send_time' => $request->rules()['send_time']], $request->messages());
 
         self::assertFalse($validator->passes());
@@ -250,46 +301,12 @@ final class NotificationRequestTest extends TestCase
         DB::table('notifications')->insert(['id' => 'n1', 'house_id' => self::HOUSE_ID, 'name' => 'Marty\'s Phone']);
         $data = ['name' => 'Marty\'s Phone'];
 
-        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules())->passes());
-    }
-
-    public function testUpdateRequestChecksTheTargetAgainstTheNewTypeWhenItIsSent(): void
-    {
-        $data = ['target' => '0400000000', 'type' => 'sms'];
-
-        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'carrier-pigeon')->rules());
-
-        self::assertFalse($validator->passes());
-        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
-    }
-
-    public function testUpdateRequestChecksTheTargetAgainstTheNotificationsOwnType(): void
-    {
-        $data = ['target' => '0400000000'];
-
-        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules());
-
-        self::assertFalse($validator->passes());
-        self::assertSame(['target'], \array_keys($validator->errors()->toArray()));
+        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data)->rules())->passes());
     }
 
     public function testUpdateRequestDoesNotAcceptHouseId(): void
     {
-        self::assertArrayNotHasKey('house_id', $this->makeUpdateRequest([], 'sms')->rules());
-    }
-
-    public function testUpdateRequestExplainsTheTargetFormatOfTheNotificationsOwnType(): void
-    {
-        $data = ['target' => '0400000000'];
-        $request = $this->makeUpdateRequest($data, 'sms');
-
-        $validator = $this->getValidator($data, $request->rules(), $request->messages());
-
-        self::assertFalse($validator->passes());
-        self::assertSame(
-            ['target' => ['The target must be an international phone number, like +61400000000.']],
-            $validator->errors()->toArray(),
-        );
+        self::assertArrayNotHasKey('house_id', $this->makeUpdateRequest([])->rules());
     }
 
     public function testUpdateRequestFailsWithANameAlreadyUsedByAnotherNotificationInTheHouse(): void
@@ -297,7 +314,7 @@ final class NotificationRequestTest extends TestCase
         DB::table('notifications')->insert(['id' => 'n2', 'house_id' => self::HOUSE_ID, 'name' => 'Doc\'s Phone']);
         $data = ['name' => 'Doc\'s Phone'];
 
-        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules());
+        $validator = $this->getValidator($data, $this->makeUpdateRequest($data)->rules());
 
         self::assertFalse($validator->passes());
         self::assertSame(['name'], \array_keys($validator->errors()->toArray()));
@@ -307,7 +324,7 @@ final class NotificationRequestTest extends TestCase
     {
         $data = ['lead_days' => 8, 'send_time' => '11:21:00', 'type' => 'carrier-pigeon'];
 
-        $validator = $this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules());
+        $validator = $this->getValidator($data, $this->makeUpdateRequest($data)->rules());
 
         self::assertFalse($validator->passes());
         self::assertSame(['lead_days', 'send_time', 'type'], \array_keys($validator->errors()->toArray()));
@@ -315,21 +332,14 @@ final class NotificationRequestTest extends TestCase
 
     public function testUpdateRequestPassesWithAnEmptyPayload(): void
     {
-        self::assertTrue($this->getValidator([], $this->makeUpdateRequest([], 'sms')->rules())->passes());
+        self::assertTrue($this->getValidator([], $this->makeUpdateRequest([])->rules())->passes());
     }
 
     public function testUpdateRequestPassesWithAPartialPayload(): void
     {
         $data = ['send_time' => '07:00:00', 'target' => '+61400000001'];
 
-        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'sms')->rules())->passes());
-    }
-
-    public function testUpdateRequestSkipsTheTargetFormatForOtherTypes(): void
-    {
-        $data = ['target' => 'not-a-phone-number'];
-
-        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data, 'carrier-pigeon')->rules())->passes());
+        self::assertTrue($this->getValidator($data, $this->makeUpdateRequest($data)->rules())->passes());
     }
 
     private function getValidator(array $data, array $rules, array $messages = []): Validator
@@ -340,7 +350,12 @@ final class NotificationRequestTest extends TestCase
         return $validator;
     }
 
-    private function makeUpdateRequest(array $input, string $notificationType): UpdateNotificationRequest
+    private function createRequest(array $data = []): CreateNotificationRequest
+    {
+        return new CreateNotificationRequest($data);
+    }
+
+    private function makeUpdateRequest(array $input, string $notificationType = 'sms'): UpdateNotificationRequest
     {
         $notification = new Notification()->setAttribute('id', 'n1')->setAttribute('house_id', self::HOUSE_ID)->setAttribute('type', $notificationType);
 
@@ -378,7 +393,7 @@ final class NotificationRequestTest extends TestCase
             ...$overrides,
         ];
 
-        $request = new CreateNotificationRequest($data);
+        $request = $this->createRequest($data);
 
         return $this->getValidator($data, $request->rules(), $request->messages());
     }

@@ -7,15 +7,11 @@ namespace App\Repositories\Interfaces;
 use App\Auth\AuthenticatedUser;
 use App\Models\PhoneNumber;
 use DateTimeImmutable;
-use Illuminate\Support\Collection;
 
 interface PhoneNumberRepositoryInterface
 {
     /** The user's number, or a new pending one. Asking again for a number they have returns the same row. */
     public function findOrCreate(AuthenticatedUser $user, string $number): PhoneNumber;
-
-    /** @return \Illuminate\Support\Collection<int, \App\Models\PhoneNumber> */
-    public function getPhoneNumbersForUser(AuthenticatedUser $user): Collection;
 
     public function markVerified(PhoneNumber $phoneNumber, DateTimeImmutable $at): PhoneNumber;
 

@@ -13,20 +13,20 @@ final readonly class CreateNotification
         public string $houseId,
         public int $leadDays,
         public string $name,
+        public string $phoneNumberId,
         public string $sendTime,
-        public string $target,
         public NotificationType $type,
     ) {
     }
 
-    public static function fromRequest(CreateNotificationRequest $request): self
+    public static function fromRequest(CreateNotificationRequest $request, string $phoneNumberId): self
     {
         return new self(
             $request->string('house_id')->toString(),
             $request->integer('lead_days'),
             $request->string('name')->toString(),
+            $phoneNumberId,
             $request->string('send_time')->toString(),
-            $request->string('target')->toString(),
             NotificationType::from($request->string('type')->toString()),
         );
     }

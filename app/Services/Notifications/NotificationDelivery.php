@@ -41,6 +41,11 @@ final readonly class NotificationDelivery implements NotificationDeliveryInterfa
         }
 
         try {
+            // Numbers are never unverified once verified, but this is the last check before a text goes to a stranger.
+            if ($notification->verified === false) {
+                throw new DeliveryFailedException('The phone number is not verified.');
+            }
+
             $this->factory->create($notification->type)->send($notification->target, $bins);
         } catch (DeliveryFailedException $e) {
             $this->logs->markFailed($log, $e->getMessage());

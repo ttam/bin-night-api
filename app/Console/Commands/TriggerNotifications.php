@@ -94,6 +94,12 @@ class TriggerNotifications extends Command
                 continue;
             }
 
+            // Waiting for its number to be verified is a normal state, not a failure: skip it quietly.
+            if ($notification->verified === false) {
+                $skipped++;
+                continue;
+            }
+
             $bins = $binRepository
                 ->getBinsForNotification($notification, $dueAt)
                 ->filter(static fn (Bin $bin): bool => $userEntities->isBinActive($bin))

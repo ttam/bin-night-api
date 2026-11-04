@@ -92,18 +92,6 @@ final class PhoneNumbersTest extends ApiTestCase
             ->assertJsonPath('errors.number.0', 'The number must be an Australian mobile, like +61400000000.');
     }
 
-    public function testTheListShowsOnlyTheUsersOwnNumbersOldestFirst(): void
-    {
-        $this->phoneNumber('+61400000002', 'pending', null, '1985-10-26 01:22:00');
-        $this->phoneNumber('+61400000001', 'verified', null, '1985-10-26 01:21:00');
-        $this->phoneNumber('+61400000009', 'verified', $this->createUser('user_222'));
-
-        $this->getJson('/api/v1/phone-numbers')->assertOk()
-            ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.number', '+61400000001')
-            ->assertJsonPath('data.1.number', '+61400000002');
-    }
-
     public function testTheRightCodeVerifiesTheNumber(): void
     {
         $id = $this->phoneNumber('+61400000000', 'pending');
@@ -300,7 +288,6 @@ final class PhoneNumbersTest extends ApiTestCase
     {
         \config(['authentication.clerk.development_user' => null]);
 
-        $this->getJson('/api/v1/phone-numbers')->assertUnauthorized();
         $this->postJson('/api/v1/phone-numbers', ['number' => '+61400000000'])->assertUnauthorized();
     }
 

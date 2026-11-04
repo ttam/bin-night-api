@@ -69,6 +69,32 @@ abstract class ApiTestCase extends TestCase
         return $id;
     }
 
+    /** The user's number, made if they do not have it yet. */
+    protected function createPhoneNumber(string $number, string $status = 'verified', ?string $userId = null): string
+    {
+        $userId ??= $this->userId;
+        $existing = DB::table('phone_numbers')->where('user_id', $userId)->where('number', $number)->value('id');
+
+        if (\is_string($existing)) {
+            return $existing;
+        }
+
+        $id = (string) Str::uuid();
+
+        DB::table('phone_numbers')->insert([
+            'id' => $id,
+            'user_id' => $userId,
+            'number' => $number,
+            'status' => $status,
+            'verified_at' => $status === 'verified' ? '1985-10-26 01:21:00' : null,
+            'created_at' => '1985-10-26 01:21:00',
+            'updated_at' => '1985-10-26 01:21:00',
+        ]);
+
+        return $id;
+    }
+
+    /** `$target` is the number the notification sends to; the user gets a verified phone number for it. */
     protected function createNotification(string $houseId, string $target, string $createdAt, ?string $userId = null, ?string $name = null): string
     {
         $id = (string) Str::uuid();
@@ -79,7 +105,7 @@ abstract class ApiTestCase extends TestCase
             'house_id' => $houseId,
             'name' => $name ?? $target,
             'type' => 'sms',
-            'target' => $target,
+            'phone_number_id' => $this->createPhoneNumber($target, userId: $userId),
             'lead_days' => 1,
             'send_time' => '18:30:00',
             'created_at' => $createdAt,

@@ -9,6 +9,7 @@ use App\DTO\Notification\DueNotification;
 use App\Enums\DeliveryResult;
 use App\Models\Bin;
 use App\Models\Notification;
+use App\Models\PhoneNumber;
 use App\Repositories\Interfaces\ActiveEntityRepositoryInterface;
 use App\Repositories\Interfaces\BinRepositoryInterface;
 use App\Repositories\Interfaces\NotificationRepositoryInterface;
@@ -81,7 +82,7 @@ final class TriggerNotificationsTest extends TestCase
     public function testACaughtUpNotificationIsDeliveredForTheMomentItWasDue(): void
     {
         $dueAt = new DateTimeImmutable('1985-10-26 00:30', new DateTimeZone('UTC'));
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
+        $notification = self::notification(1, 'user-1');
         $bins = new Collection([new Bin()->setAttribute('id', 1)]);
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
@@ -112,9 +113,9 @@ final class TriggerNotificationsTest extends TestCase
     public function testActiveEntitiesAreLoadedOncePerUser(): void
     {
         $notifications = new Collection([
-            new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1'),
-            new Notification()->setAttribute('id', 2)->setAttribute('user_external_id', 'user-1'),
-            new Notification()->setAttribute('id', 3)->setAttribute('user_external_id', 'user-2'),
+            self::notification(1, 'user-1'),
+            self::notification(2, 'user-1'),
+            self::notification(3, 'user-2'),
         ]);
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
@@ -201,7 +202,7 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testDryRunSendsOutput(): void
     {
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1')->setAttribute('target', '04xxxxxxxx');
+        $notification = self::notification(1, 'user-1');
         $binCollection = new Collection([
             new Bin()->setAttribute('id', 1)->setAttribute('name', 'Example'),
             new Bin()->setAttribute('id', 2)->setAttribute('name', 'Other'),
@@ -247,7 +248,7 @@ final class TriggerNotificationsTest extends TestCase
     {
         $after = new DateTimeImmutable('1985-10-26 01:00:00', new DateTimeZone('UTC'));
         $dueAt = new DateTimeImmutable('1985-10-26 01:15:00', new DateTimeZone('UTC'));
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
+        $notification = self::notification(1, 'user-1');
         $binCollection = new Collection([
             new Bin()->setAttribute('id', 1),
             new Bin()->setAttribute('id', 2),
@@ -287,7 +288,7 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testInactiveBinsAreLeftOutOfTheNotification(): void
     {
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
+        $notification = self::notification(1, 'user-1');
         $active = new Bin()->setAttribute('id', 1)->setAttribute('name', 'Active');
         $inactive = new Bin()->setAttribute('id', 2)->setAttribute('name', 'Inactive');
 
@@ -317,7 +318,7 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testInactiveNotificationIsSkipped(): void
     {
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
+        $notification = self::notification(1, 'user-1');
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
@@ -333,6 +334,28 @@ final class TriggerNotificationsTest extends TestCase
         );
 
         self::assertSame(0, $exitCode);
+    }
+
+    public function testNotificationWaitingForItsNumberToBeVerifiedIsSkippedWithoutLookingForBins(): void
+    {
+        $notification = self::notification(1, 'user-1', verified: false);
+
+        /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
+        $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
+        $notificationRepository->method('getDueNotifications')->willReturn($this->makeDue($notification));
+
+        $exitCode = $this->makeCommand(null, [])->handle(
+            $this->makeActiveEntityRepository(),
+            $this->makeExceptionStub(BinRepositoryInterface::class, 'getBinsForNotification'),
+            new KnownClock(new DateTimeImmutable('1985-10-26 01:21', new DateTimeZone('UTC'))),
+            $this->makeConfig(),
+            $this->makeExceptionStub(NotificationDeliveryInterface::class, 'deliver'),
+            $notificationRepository,
+        );
+
+        self::assertSame(0, $exitCode);
+        self::assertSame([], $this->errors);
+        self::assertSame(['1985-10-26 01:15: 1 due, 1 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress.'], $this->info);
     }
 
     public function testInProgressDeliveryWarnsButDoesNotFailTheRun(): void
@@ -365,7 +388,7 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testNothingIsDeliveredWhenThereAreNoBins(): void
     {
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1')->setAttribute('target', '04xxxxxxxx');
+        $notification = self::notification(1, 'user-1');
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
@@ -390,7 +413,7 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testNothingIsSentWhenEveryBinIsInactive(): void
     {
-        $notification = new Notification()->setAttribute('id', 1)->setAttribute('user_external_id', 'user-1');
+        $notification = self::notification(1, 'user-1');
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
@@ -416,9 +439,9 @@ final class TriggerNotificationsTest extends TestCase
 
     public function testNotificationsChangedAfterTheirSlotAreSkipped(): void
     {
-        $changedAfter = new Notification()->setRawAttributes(['id' => 1, 'user_external_id' => 'user-1', 'updated_at' => new DateTimeImmutable('1985-10-26 01:10:00', new DateTimeZone('UTC'))]);
-        $changedBefore = new Notification()->setRawAttributes(['id' => 2, 'user_external_id' => 'user-1', 'updated_at' => new DateTimeImmutable('1985-10-26 00:59:59', new DateTimeZone('UTC'))]);
-        $neverChanged = new Notification()->setAttribute('id', 3)->setAttribute('user_external_id', 'user-1');
+        $changedAfter = self::notification(1)->setRawAttributes(['id' => 1, 'user_external_id' => 'user-1', 'updated_at' => new DateTimeImmutable('1985-10-26 01:10:00', new DateTimeZone('UTC'))]);
+        $changedBefore = self::notification(2)->setRawAttributes(['id' => 2, 'user_external_id' => 'user-1', 'updated_at' => new DateTimeImmutable('1985-10-26 00:59:59', new DateTimeZone('UTC'))]);
+        $neverChanged = self::notification(3, 'user-1');
 
         /** @var \App\Repositories\Interfaces\NotificationRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $notificationRepository */
         $notificationRepository = $this->createStub(NotificationRepositoryInterface::class);
@@ -464,6 +487,15 @@ final class TriggerNotificationsTest extends TestCase
      * @param list<int> $binIds
      * @param list<int> $houseIds
      */
+    /** A due notification whose number is verified, unless it is said not to be. */
+    private static function notification(int $id, string $user = 'user-1', bool $verified = true): Notification
+    {
+        return new Notification()
+            ->setAttribute('id', $id)
+            ->setAttribute('user_external_id', $user)
+            ->setRelation('phoneNumber', new PhoneNumber()->setAttribute('number', '04xxxxxxxx')->setAttribute('status', $verified ? 'verified' : 'pending'));
+    }
+
     private function makeActiveEntities(array $notificationIds, array $binIds, array $houseIds): ActiveEntities
     {
         return new ActiveEntities(
@@ -590,7 +622,7 @@ final class TriggerNotificationsTest extends TestCase
     private function runWithDeliveries(DeliveryResult ...$results): int
     {
         $notifications = new Collection(\array_map(
-            static fn (int $id): Notification => new Notification()->setAttribute('id', $id)->setAttribute('user_external_id', 'user-1'),
+            static fn (int $id): Notification => self::notification($id),
             \range(1, \count($results)),
         ));
 

@@ -22,6 +22,12 @@ final class NotificationRepositoryTest extends TestCase
     protected function setUp(): void
     {
         $this->bootEloquent()->migrate();
+
+        DB::table('phone_numbers')->insert([
+            ['id' => 'p1', 'number' => '+61400000000', 'status' => 'verified'],
+            ['id' => 'p2', 'number' => '+61400000001', 'status' => 'verified'],
+            ['id' => 'p3', 'number' => '04aaaaaaaa', 'status' => 'verified'],
+        ]);
     }
 
     public function testCreateNotification(): void
@@ -30,12 +36,14 @@ final class NotificationRepositoryTest extends TestCase
 
         $notification = new NotificationRepository()->createNotification(
             new AuthenticatedUser(['sub' => 'user_111']),
-            new CreateNotification('house-1', 2, 'Marty\'s Phone', '18:30:00', '+61400000000', NotificationType::SMS),
+            new CreateNotification('house-1', 2, 'Marty\'s Phone', 'p1', '18:30:00', NotificationType::SMS),
         );
 
         self::assertSame(2, $notification->leadDays);
         self::assertSame('Marty\'s Phone', $notification->name);
+        self::assertSame('p1', $notification->phoneNumberId);
         self::assertSame('18:30:00', $notification->sendTime);
+        self::assertTrue($notification->relationLoaded('phoneNumber'));
         self::assertSame('+61400000000', $notification->target);
         self::assertSame(NotificationType::SMS, $notification->type);
         self::assertSame('1', $notification->userId);
@@ -46,8 +54,8 @@ final class NotificationRepositoryTest extends TestCase
     public function testDeleteNotification(): void
     {
         DB::table('notifications')->insert([
-            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'name' => 'Marty\'s Phone', 'type' => 'sms', 'target' => '+61400000000', 'send_time' => '11:00:00'],
-            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'name' => 'Keep', 'type' => 'sms', 'target' => '+61400000001', 'send_time' => '11:00:00'],
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'name' => 'Marty\'s Phone', 'type' => 'sms', 'phone_number_id' => 'p1', 'send_time' => '11:00:00'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'name' => 'Keep', 'type' => 'sms', 'phone_number_id' => 'p2', 'send_time' => '11:00:00'],
         ]);
 
         new NotificationRepository()->deleteNotification(new Notification()->newQuery()->findOrFail('1'));
@@ -67,6 +75,21 @@ final class NotificationRepositoryTest extends TestCase
             ['1 1985-10-24 09:00', '1 1985-10-25 09:00', '1 1985-10-26 09:00'],
             $this->due('1985-10-24 08:00', '1985-10-26 09:00'),
         );
+    }
+
+    public function testGetDueNotificationsComeWithTheirPhoneNumbers(): void
+    {
+        $this->givenHouses(['1' => 'UTC']);
+        DB::table('notifications')->insert([$this->row('1', '1', '09:00:00')]);
+
+        $due = new NotificationRepository()->getDueNotifications(
+            new DateTimeImmutable('1985-10-26 08:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('1985-10-26 09:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertCount(1, $due);
+        self::assertTrue($due->first()->notification->relationLoaded('phoneNumber'));
+        self::assertSame('04aaaaaaaa', $due->first()->notification->target);
     }
 
     public function testGetDueNotificationsEveryNotificationIsDueExactlyOnceTheNightClocksGoBack(): void
@@ -235,9 +258,9 @@ final class NotificationRepositoryTest extends TestCase
         ]);
 
         DB::table('notifications')->insert([
-            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '04aaaaaaaa', 'send_time' => '00:00:00'],
-            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '04bbbbbbbb', 'send_time' => '00:00:00'],
-            ['id' => '3', 'user_id' => '2', 'house_id' => '1', 'type' => 'sms', 'target' => '04cccccccc', 'send_time' => '00:00:00'],
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p1', 'send_time' => '00:00:00'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p2', 'send_time' => '00:00:00'],
+            ['id' => '3', 'user_id' => '2', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p3', 'send_time' => '00:00:00'],
         ]);
 
         $results = new NotificationRepository()->getNotificationsForUser(new AuthenticatedUser(['sub' => 'user_111']));
@@ -245,13 +268,15 @@ final class NotificationRepositoryTest extends TestCase
         self::assertCount(2, $results);
         self::assertInstanceOf(Notification::class, $results->first());
         self::assertEquals(['1', '2'], $results->pluck('id')->all());
+        self::assertSame(['+61400000000', '+61400000001'], $results->map(static fn (Notification $notification): string => $notification->target)->all());
+        self::assertTrue($results->every(static fn (Notification $notification): bool => $notification->relationLoaded('phoneNumber')));
     }
 
     public function testUpdateNotification(): void
     {
         DB::table('notifications')->insert([
-            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '+61400000000', 'lead_days' => 0, 'send_time' => '11:00:00'],
-            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'target' => '+61400000001', 'lead_days' => 0, 'send_time' => '11:00:00'],
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p1', 'lead_days' => 0, 'send_time' => '11:00:00'],
+            ['id' => '2', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p2', 'lead_days' => 0, 'send_time' => '11:00:00'],
         ]);
 
         $result = new NotificationRepository()->updateNotification(
@@ -264,6 +289,22 @@ final class NotificationRepositoryTest extends TestCase
         self::assertSame('+61400000000', $result->target);
         self::assertSame('18:30:00', DB::table('notifications')->where('id', '1')->value('send_time'));
         self::assertSame('11:00:00', DB::table('notifications')->where('id', '2')->value('send_time'));
+    }
+
+    public function testUpdateNotificationMovesItToAnotherPhoneNumber(): void
+    {
+        DB::table('notifications')->insert([
+            ['id' => '1', 'user_id' => '1', 'house_id' => '1', 'type' => 'sms', 'phone_number_id' => 'p1', 'lead_days' => 0, 'send_time' => '11:00:00'],
+        ]);
+
+        $result = new NotificationRepository()->updateNotification(
+            new Notification()->newQuery()->findOrFail('1'),
+            new UpdateNotification(['phone_number_id' => 'p2']),
+        );
+
+        self::assertSame('p2', $result->phoneNumberId);
+        self::assertSame('+61400000001', $result->target);
+        self::assertSame('p2', DB::table('notifications')->where('id', '1')->value('phone_number_id'));
     }
 
     /**
@@ -300,13 +341,19 @@ final class NotificationRepositoryTest extends TestCase
             $table->softDeletes();
         });
 
+        DB::schema()->create('phone_numbers', static function (Blueprint $table): void {
+            $table->string('id')->primary();
+            $table->string('number');
+            $table->string('status');
+        });
+
         DB::schema()->create('notifications', static function (Blueprint $table): void {
             $table->string('id')->primary();
             $table->string('user_id');
             $table->string('house_id');
             $table->string('name')->nullable();
             $table->string('type');
-            $table->string('target');
+            $table->string('phone_number_id');
             $table->integer('lead_days')->default(0);
             $table->integer('offset_days')->default(0);
             $table->string('send_time');
@@ -326,6 +373,6 @@ final class NotificationRepositoryTest extends TestCase
     /** @return array<string, string> */
     private function row(string $id, string $house, string $sendTime): array
     {
-        return ['id' => $id, 'user_id' => '1', 'house_id' => $house, 'type' => 'sms', 'target' => '04aaaaaaaa', 'send_time' => $sendTime];
+        return ['id' => $id, 'user_id' => '1', 'house_id' => $house, 'type' => 'sms', 'phone_number_id' => 'p3', 'send_time' => $sendTime];
     }
 }

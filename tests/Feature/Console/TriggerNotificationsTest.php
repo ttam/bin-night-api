@@ -69,6 +69,27 @@ final class TriggerNotificationsTest extends ApiTestCase
         self::assertSame(1, DB::table('notification_logs')->count());
     }
 
+    public function testANotificationWaitingForItsNumberToBeVerifiedIsSkippedNotFailed(): void
+    {
+        $notificationId = $this->givenANotificationIsDue();
+        DB::table('phone_numbers')->update(['status' => 'pending', 'verified_at' => null]);
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])
+            ->expectsOutputToContain('1 due, 1 skipped, 0 sent, 0 failed, 0 already sent, 0 in progress')
+            ->assertExitCode(0);
+
+        self::assertSame([], $this->twilio->messages);
+        self::assertSame(0, DB::table('notification_logs')->where('notification_id', $notificationId)->count());
+
+        // Once the number is verified the same slot is sent, if it is still inside the catch-up window.
+        DB::table('phone_numbers')->update(['status' => 'verified', 'verified_at' => '1985-10-26 01:21:00']);
+
+        $this->artisan('bin-night:trigger-notifications', ['now' => self::SLOT])->assertExitCode(0);
+
+        self::assertCount(1, $this->twilio->messages);
+        self::assertSame('+61400000000', $this->twilio->messages[0]['to']);
+    }
+
     public function testAFailedSlotIsRetriedWhenTheSlotIsRunAgain(): void
     {
         $notificationId = $this->givenANotificationIsDue();

@@ -12,7 +12,6 @@ use App\Repositories\Interfaces\PhoneNumberRepositoryInterface;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Collection;
 
 final readonly class PhoneNumberRepository implements PhoneNumberRepositoryInterface
 {
@@ -40,17 +39,6 @@ final readonly class PhoneNumberRepository implements PhoneNumberRepositoryInter
         }
 
         return $phoneNumber;
-    }
-
-    /** @inheritDoc */
-    public function getPhoneNumbersForUser(AuthenticatedUser $user): Collection
-    {
-        return new PhoneNumber()->newQuery()
-            ->select('phone_numbers.*')
-            ->join('users', 'users.id', '=', 'phone_numbers.user_id')
-            ->where('users.external_id', '=', $user->id)
-            ->orderBy('phone_numbers.created_at')
-            ->get();
     }
 
     public function markVerified(PhoneNumber $phoneNumber, DateTimeImmutable $at): PhoneNumber

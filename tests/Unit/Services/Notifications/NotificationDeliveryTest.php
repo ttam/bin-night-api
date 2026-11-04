@@ -11,6 +11,7 @@ use App\Factories\Interfaces\NotificationSenderFactoryInterface;
 use App\Models\Bin;
 use App\Models\Notification;
 use App\Models\NotificationLog;
+use App\Models\PhoneNumber;
 use App\Repositories\Interfaces\NotificationLogRepositoryInterface;
 use App\Services\Clock\KnownClock;
 use App\Services\Notifications\Exceptions\DeliveryFailedException;
@@ -78,6 +79,31 @@ final class NotificationDeliveryTest extends TestCase
         self::assertSame(DeliveryResult::FAILED, $result);
     }
 
+    public function testDeliverFailsWithoutSendingWhenThePhoneNumberIsNotVerified(): void
+    {
+        $log = new NotificationLog();
+        $notification = $this->notification()->setRelation('phoneNumber', new PhoneNumber()->setAttribute('number', '+61400000000')->setAttribute('status', 'pending'));
+
+        $logs = $this->createMock(NotificationLogRepositoryInterface::class);
+        $logs->method('claim')->willReturn($log);
+        $logs->expects($this->once())->method('markFailed')->with($log, 'The phone number is not verified.');
+        $logs->expects($this->never())->method('markSent');
+
+        $factory = $this->createMock(NotificationSenderFactoryInterface::class);
+        $factory->expects($this->never())->method('create');
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('warning')->with('Notification delivery failed.', [
+            'notification' => 'n1',
+            'reason' => 'The phone number is not verified.',
+            'scheduled_for' => '1985-10-26 01:30',
+        ]);
+
+        $result = new NotificationDelivery($this->clock(), $factory, $logger, $logs)->deliver($notification, new Collection([new Bin()]), $this->slot());
+
+        self::assertSame(DeliveryResult::FAILED, $result);
+    }
+
     #[DataProvider('getUnclaimedStatuses')]
     public function testDeliverSendsNothingWhenTheSlotIsNotOursToTake(DeliveryStatus $status, DeliveryResult $expected): void
     {
@@ -111,7 +137,10 @@ final class NotificationDeliveryTest extends TestCase
 
     private function notification(): Notification
     {
-        return new Notification()->setAttribute('id', 'n1')->setAttribute('type', 'sms')->setAttribute('target', '+61400000000');
+        return new Notification()
+            ->setAttribute('id', 'n1')
+            ->setAttribute('type', 'sms')
+            ->setRelation('phoneNumber', new PhoneNumber()->setAttribute('number', '+61400000000')->setAttribute('status', 'verified'));
     }
 
     private function now(): DateTimeImmutable

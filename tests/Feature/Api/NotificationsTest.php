@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Enums\VerificationResult;
+use App\Services\Verification\Interfaces\PhoneVerifierInterface;
 use Illuminate\Support\Facades\DB;
 
 final class NotificationsTest extends ApiTestCase
@@ -19,9 +21,72 @@ final class NotificationsTest extends ApiTestCase
             ->assertJsonPath('data.name', 'Marty\'s Phone')
             ->assertJsonPath('data.send_time', '18:30:00')
             ->assertJsonPath('data.target', '+61400000000')
-            ->assertJsonPath('data.type', 'sms');
+            ->assertJsonPath('data.type', 'sms')
+            ->assertJsonPath('data.verified', false);
 
         self::assertSame(1, DB::table('notifications')->count());
+    }
+
+    public function testCreateForANewNumberMakesItPendingAndSendsNothing(): void
+    {
+        $verifier = $this->spyOnVerifier();
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $response = $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated();
+
+        self::assertSame(1, DB::table('phone_numbers')->count());
+        self::assertSame('pending', DB::table('phone_numbers')->value('status'));
+        self::assertSame($this->userId, DB::table('phone_numbers')->value('user_id'));
+        self::assertSame(DB::table('phone_numbers')->value('id'), $response->json('data.phone_number_id'));
+        self::assertSame(DB::table('phone_numbers')->value('id'), DB::table('notifications')->value('phone_number_id'));
+        self::assertSame([], $verifier->enrolled);
+    }
+
+    public function testCreateForAVerifiedNumberIsVerifiedAtOnce(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $phoneNumberId = $this->createPhoneNumber('+61400000000');
+
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated()
+            ->assertJsonPath('data.verified', true)
+            ->assertJsonPath('data.phone_number_id', $phoneNumberId);
+
+        self::assertSame(1, DB::table('phone_numbers')->count());
+    }
+
+    public function testNotificationsOnTheSameNumberShareIt(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated();
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'name' => 'Second'])->assertCreated();
+
+        self::assertSame(1, DB::table('phone_numbers')->count());
+        self::assertSame(1, DB::table('notifications')->distinct()->count('phone_number_id'));
+    }
+
+    public function testAnotherUsersVerifiedNumberDoesNotVerifyMine(): void
+    {
+        $this->createPhoneNumber('+61400000000', userId: $this->createUser('user_222'));
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated()->assertJsonPath('data.verified', false);
+
+        self::assertSame(2, DB::table('phone_numbers')->count());
+    }
+
+    public function testVerifyingTheNumberVerifiesEveryNotificationUsingIt(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $this->postJson('/api/v1/notifications', $this->validPayload($houseId))->assertCreated();
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'name' => 'Second'])->assertCreated();
+        $phoneNumberId = DB::table('phone_numbers')->value('id');
+
+        $this->postJson("/api/v1/phone-numbers/{$phoneNumberId}/verify", ['code' => '123456'])->assertOk();
+
+        $this->getJson('/api/v1/notifications')->assertOk()
+            ->assertJsonPath('data.0.verified', true)
+            ->assertJsonPath('data.1.verified', true);
     }
 
     public function testCreateInAnotherUsersHouseIsNotFound(): void
@@ -56,15 +121,38 @@ final class NotificationsTest extends ApiTestCase
             ->assertJsonValidationErrors(['name']);
     }
 
-    public function testCreateRejectsAnInvalidPhoneNumberWithAHelpfulMessage(): void
+    /** @return iterable<string, array{mixed}> */
+    public static function badTargets(): iterable
+    {
+        yield 'a landline' => ['+61290000000'];
+        yield 'a New Zealand mobile' => ['+64211234567'];
+        yield 'local format' => ['0400000000'];
+        yield 'without the plus' => ['61400000000'];
+        yield 'with spaces' => ['+61 400 000 000'];
+        yield 'not a number' => ['example'];
+        yield 'a number' => [61400000000];
+        yield 'empty' => [''];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badTargets')]
+    public function testCreateRejectsATargetThatIsNotAnAustralianMobile(mixed $target): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'target' => $target])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['target']);
+
+        self::assertSame(0, DB::table('notifications')->count());
+        self::assertSame(0, DB::table('phone_numbers')->count());
+    }
+
+    public function testCreateExplainsABadTargetInPlainWords(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
 
         $this->postJson('/api/v1/notifications', [...$this->validPayload($houseId), 'target' => '0400000000'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['target' => 'The target must be an international phone number, like +61400000000.']);
-
-        self::assertSame(0, DB::table('notifications')->count());
+            ->assertJsonPath('errors.target.0', 'The target must be an Australian mobile, like +61400000000.');
     }
 
     public function testCreateRejectsAnUnknownType(): void
@@ -222,16 +310,58 @@ final class NotificationsTest extends ApiTestCase
         self::assertSame('07:30:00', DB::table('notifications')->where('id', $notificationId)->value('send_time'));
     }
 
-    public function testUpdateChecksTheTargetAgainstTheStoredType(): void
+    public function testUpdateMovesTheNotificationToANewNumberAndItWaitsThere(): void
+    {
+        $verifier = $this->spyOnVerifier();
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+        $oldId = $this->createPhoneNumber('+61400000000');
+
+        $response = $this->patchJson('/api/v1/notifications/' . $notificationId, ['target' => '+61400000009'])->assertOk()
+            ->assertJsonPath('data.target', '+61400000009')
+            ->assertJsonPath('data.verified', false);
+
+        self::assertNotSame($oldId, $response->json('data.phone_number_id'));
+        self::assertSame($response->json('data.phone_number_id'), DB::table('notifications')->where('id', $notificationId)->value('phone_number_id'));
+        self::assertSame('pending', DB::table('phone_numbers')->where('number', '+61400000009')->value('status'));
+        self::assertSame('verified', DB::table('phone_numbers')->where('id', $oldId)->value('status'));
+        self::assertSame([], $verifier->enrolled);
+    }
+
+    public function testUpdateToAVerifiedNumberIsVerifiedAtOnce(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+        $otherId = $this->createPhoneNumber('+61400000009');
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['target' => '+61400000009'])->assertOk()
+            ->assertJsonPath('data.verified', true)
+            ->assertJsonPath('data.phone_number_id', $otherId);
+    }
+
+    public function testUpdateKeepsTheNumberWhenTheTargetIsNotSent(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
         $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
 
-        $this->patchJson('/api/v1/notifications/' . $notificationId, ['target' => '0400000000'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['target' => 'The target must be an international phone number, like +61400000000.']);
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['lead_days' => 2])->assertOk()
+            ->assertJsonPath('data.verified', true)
+            ->assertJsonPath('data.target', '+61400000000');
 
-        self::assertSame('+61400000000', DB::table('notifications')->where('id', $notificationId)->value('target'));
+        self::assertSame(1, DB::table('phone_numbers')->count());
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badTargets')]
+    public function testUpdateRejectsATargetThatIsNotAnAustralianMobile(mixed $target): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $notificationId = $this->createNotification($houseId, '+61400000000', '1955-11-12 06:00:00');
+
+        $this->patchJson('/api/v1/notifications/' . $notificationId, ['target' => $target])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['target']);
+
+        self::assertSame(1, DB::table('phone_numbers')->count());
     }
 
     public function testUpdateIgnoresAHouseId(): void
@@ -320,5 +450,26 @@ final class NotificationsTest extends ApiTestCase
             'target' => '+61400000000',
             'type' => 'sms',
         ];
+    }
+
+    private function spyOnVerifier(): object
+    {
+        $verifier = new class() implements PhoneVerifierInterface {
+            /** @var list<string> */
+            public array $enrolled = [];
+
+            public function check(string $number, string $code): VerificationResult
+            {
+                return VerificationResult::APPROVED;
+            }
+
+            public function enrol(string $number): void
+            {
+                $this->enrolled[] = $number;
+            }
+        };
+        $this->app->instance(PhoneVerifierInterface::class, $verifier);
+
+        return $verifier;
     }
 }

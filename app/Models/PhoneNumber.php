@@ -17,6 +17,11 @@ final class PhoneNumber extends Model
         get => $this->getAttribute('status');
     }
 
+    /** The primary key, typed. (Not called `id`: Eloquent reads that while it is still being made.) */
+    public string $uuid {
+        get => $this->getAttribute('id');
+    }
+
     protected function casts(): array
     {
         return [

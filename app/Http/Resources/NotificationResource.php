@@ -21,9 +21,11 @@ final class NotificationResource extends JsonResource
             'id' => $this->resource->getKey(),
             'lead_days' => $this->resource->leadDays,
             'name' => $this->resource->name,
+            'phone_number_id' => $this->resource->phoneNumberId,
             'send_time' => $this->resource->sendTime,
             'target' => $this->resource->target,
             'type' => $this->resource->type->value,
+            'verified' => $this->resource->verified,
         ];
     }
 }

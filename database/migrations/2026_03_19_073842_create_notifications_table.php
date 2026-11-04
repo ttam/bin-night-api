@@ -18,9 +18,9 @@ return new class() extends Migration {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('house_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('phone_number_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->string('type')->default('sms');
-            $table->string('target');
             $table->integer('lead_days')->default(0);
             $table->time('send_time');
             $table->dateTimes();

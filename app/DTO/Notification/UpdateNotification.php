@@ -9,14 +9,15 @@ use App\Http\Requests\Notification\UpdateNotificationRequest;
 
 final readonly class UpdateNotification
 {
-    /** @param array{lead_days?: int, name?: string, send_time?: string, target?: string, type?: NotificationType} $values */
+    /** @param array{lead_days?: int, name?: string, phone_number_id?: string, send_time?: string, type?: NotificationType} $values */
     public function __construct(private array $values)
     {
     }
 
-    public static function fromRequest(UpdateNotificationRequest $request): self
+    /** @param string|null $phoneNumberId the destination for a new `target`, which the controller has already found */
+    public static function fromRequest(UpdateNotificationRequest $request, ?string $phoneNumberId = null): self
     {
-        /** @var array{lead_days?: int|string, name?: string, send_time?: string, target?: string, type?: string} $validated */
+        /** @var array{lead_days?: int|string, name?: string, send_time?: string, type?: string} $validated */
         $validated = $request->validated();
 
         $values = [];
@@ -29,12 +30,12 @@ final readonly class UpdateNotification
             $values['name'] = $validated['name'];
         }
 
-        if (\array_key_exists('send_time', $validated)) {
-            $values['send_time'] = $validated['send_time'];
+        if ($phoneNumberId !== null) {
+            $values['phone_number_id'] = $phoneNumberId;
         }
 
-        if (\array_key_exists('target', $validated)) {
-            $values['target'] = $validated['target'];
+        if (\array_key_exists('send_time', $validated)) {
+            $values['send_time'] = $validated['send_time'];
         }
 
         if (\array_key_exists('type', $validated)) {
@@ -57,12 +58,12 @@ final readonly class UpdateNotification
             $values['name'] = $this->values['name'];
         }
 
-        if (\array_key_exists('send_time', $this->values)) {
-            $values['send_time'] = $this->values['send_time'];
+        if (\array_key_exists('phone_number_id', $this->values)) {
+            $values['phone_number_id'] = $this->values['phone_number_id'];
         }
 
-        if (\array_key_exists('target', $this->values)) {
-            $values['target'] = $this->values['target'];
+        if (\array_key_exists('send_time', $this->values)) {
+            $values['send_time'] = $this->values['send_time'];
         }
 
         if (\array_key_exists('type', $this->values)) {

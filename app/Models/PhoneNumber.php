@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\PhoneNumberStatus;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /** A mobile number owned by a user. Once verified it serves every notification in every house. */
 final class PhoneNumber extends Model
 {
+    use SoftDeletes;
+
     public string $number {
         get => $this->getAttribute('number');
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Repositories;
 
 use App\Auth\AuthenticatedUser;
+use App\Auth\Exceptions\AccountDeletedException;
 use App\Models\User;
 use App\Repositories\UserRepository;
 use Illuminate\Database\Capsule\Manager as DB;
@@ -103,6 +104,19 @@ final class UserRepositoryTest extends TestCase
         self::assertSame('marty@example.com', DB::table('users')->value('email'));
     }
 
+    public function testCreateUserFromAuthenticatedUserRefusesADeletedAccountAndMakesNoSecondUser(): void
+    {
+        DB::table('users')->insert(['id' => '1', 'external_id' => 'user_111', 'deleted_at' => '1985-10-26 01:21:00', 'created_at' => '1985-10-25 01:21:00', 'updated_at' => '1985-10-25 01:21:00']);
+
+        try {
+            new UserRepository()->createUserFromAuthenticatedUser($this->claims());
+            self::fail('Expected the deleted account to be refused.');
+        } catch (AccountDeletedException) {
+            self::assertSame(1, DB::table('users')->count());
+            self::assertSame('1985-10-26 01:21:00', DB::table('users')->value('deleted_at'));
+        }
+    }
+
     public function testGetUserFromExternalId(): void
     {
         DB::table('users')->insert([
@@ -126,6 +140,7 @@ final class UserRepositoryTest extends TestCase
             $table->string('name')->nullable();
             $table->string('email')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 }

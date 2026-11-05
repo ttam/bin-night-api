@@ -160,6 +160,7 @@ final class ActiveEntityRepositoryTest extends TestCase
             $table->string('id');
             $table->string('plan');
             $table->string('external_id')->nullable();
+            $table->softDeletes();
         });
 
         DB::schema()->create('houses', static function (Blueprint $table): void {

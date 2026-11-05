@@ -135,6 +135,7 @@ final class HousePolicyTest extends TestCase
         DB::schema()->create('users', static function (Blueprint $table): void {
             $table->string('id');
             $table->string('plan')->default('free');
+            $table->softDeletes();
         });
 
         DB::schema()->create('houses', static function (Blueprint $table): void {

@@ -21,6 +21,7 @@ return new class() extends Migration {
             $table->string('status')->default('pending');
             $table->dateTime('verified_at')->nullable();
             $table->dateTimes();
+            $table->softDeletesDatetime();
 
             $table->unique(['user_id', 'number']);
         });

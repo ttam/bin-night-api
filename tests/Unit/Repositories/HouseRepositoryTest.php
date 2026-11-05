@@ -106,6 +106,7 @@ final class HouseRepositoryTest extends TestCase
         DB::schema()->create('users', static function (Blueprint $table): void {
             $table->string('id');
             $table->string('external_id');
+            $table->softDeletes();
         });
 
         DB::schema()->create('houses', static function (Blueprint $table): void {

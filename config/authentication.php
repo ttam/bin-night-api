@@ -9,5 +9,7 @@ return [
         'development_user' => \env('CLERK_USER_ID'),
 
         'jwks_url' => \env('CLERK_JWKS_URL'),
+
+        'webhook_secret' => \env('CLERK_WEBHOOK_SECRET'),
     ],
 ];

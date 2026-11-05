@@ -8,8 +8,12 @@ use App\Http\Controllers\Api\Me;
 use App\Http\Controllers\Api\Notifications;
 use App\Http\Controllers\Api\PhoneNumbers;
 use App\Http\Controllers\Api\Schedule;
+use App\Http\Controllers\Api\Webhooks;
 use Illuminate\Contracts\Routing\Registrar;
 use Illuminate\Support\Facades\Route;
+
+// Called by Clerk, not by a signed-in user: it is trusted by its signature and nothing else.
+Route::post('webhooks/clerk', Webhooks\ClerkController::class);
 
 Route::prefix('v1')->group(static function (Registrar $route): void {
     $route->group(['middleware' => ['jwt.auth', 'provision-user', 'active-entities']], static function (Registrar $route): void {

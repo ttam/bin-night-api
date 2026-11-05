@@ -21,6 +21,9 @@ use App\Services\Verification\FakeVerifier;
 use App\Services\Verification\Interfaces\CodeSenderInterface;
 use App\Services\Verification\Interfaces\PhoneVerifierInterface;
 use App\Services\Verification\TwilioVerifier;
+use App\Services\Webhooks\Interfaces\WebhookVerifierInterface;
+use App\Services\Webhooks\SvixVerifier;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Psr\Clock\ClockInterface;
 
@@ -34,6 +37,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ClockInterface::class, Clock::class);
         $this->app->singleton(AttachActiveEntitiesInterface::class, AttachActiveEntities::class);
         $this->app->singleton(NotificationDeliveryInterface::class, NotificationDelivery::class);
+        $this->app->singleton(WebhookVerifierInterface::class, static function (Application $app): WebhookVerifierInterface {
+            /** @var string|null $secret */
+            $secret = $app->make('config')->get('authentication.clerk.webhook_secret');
+
+            return new SvixVerifier($secret, $app->make(ClockInterface::class));
+        });
         $this->app->singleton(CodeSenderInterface::class, CodeSender::class);
         $this->app->singleton(PhoneVerifierInterface::class, $isDevelopment ? FakeVerifier::class : TwilioVerifier::class);
         $this->app->singleton(TargetResolverInterface::class, TargetResolver::class);

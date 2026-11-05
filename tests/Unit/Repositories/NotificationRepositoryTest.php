@@ -333,6 +333,7 @@ final class NotificationRepositoryTest extends TestCase
         DB::schema()->create('users', static function (Blueprint $table): void {
             $table->string('id');
             $table->string('external_id');
+            $table->softDeletes();
         });
 
         DB::schema()->create('houses', static function (Blueprint $table): void {
@@ -345,6 +346,7 @@ final class NotificationRepositoryTest extends TestCase
             $table->string('id')->primary();
             $table->string('number');
             $table->string('status');
+            $table->softDeletes();
         });
 
         DB::schema()->create('notifications', static function (Blueprint $table): void {

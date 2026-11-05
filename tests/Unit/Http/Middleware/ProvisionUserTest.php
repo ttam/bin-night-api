@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Http\Middleware;
 
 use App\Auth\AuthenticatedUser;
+use App\Auth\Exceptions\AccountDeletedException;
 use App\Http\Middleware\ProvisionUser;
 use App\Models\User;
 use App\Repositories\Interfaces\UserRepositoryInterface;
@@ -36,5 +37,18 @@ final class ProvisionUserTest extends TestCase
         );
 
         self::assertSame('provisioned', $response->getContent());
+    }
+
+    public function testAnAccountThatWasDeletedIsNotAuthenticatedAndTheRequestGoesNoFurther(): void
+    {
+        $request = Request::create('/api/v1/houses')->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));
+
+        $users = $this->createStub(UserRepositoryInterface::class);
+        $users->method('createUserFromAuthenticatedUser')->willThrowException(new AccountDeletedException());
+
+        $response = new ProvisionUser($users)->handle($request, static fn (): Response => throw new \LogicException('The request should not get this far.'));
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertSame('{"message":"Unauthenticated."}', $response->getContent());
     }
 }

@@ -26,6 +26,7 @@ return new class() extends Migration {
             $table->string('password')->nullable();
             $table->rememberToken();
             $table->dateTimes();
+            $table->softDeletesDatetime();
         });
 
         Schema::create('password_reset_tokens', static function (Blueprint $table): void {

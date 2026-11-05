@@ -21,11 +21,17 @@ final readonly class ProvisionUser
     /** @param \Closure(\Illuminate\Http\Request): \Symfony\Component\HttpFoundation\Response $next */
     public function handle(Request $request, Closure $next): Response
     {
+        $authenticated = AuthenticatedUser::fromRequest($request);
+
         try {
-            $this->userRepository->createUserFromAuthenticatedUser(AuthenticatedUser::fromRequest($request));
+            $user = $this->userRepository->createUserFromAuthenticatedUser($authenticated);
         } catch (AccountDeletedException) {
             return new JsonResponse(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
         }
+
+        // The row is found once, here; the rest of the request reads it from the authenticated user.
+        $withUser = $authenticated->withUser($user);
+        $request->setUserResolver(static fn (): AuthenticatedUser => $withUser);
 
         return $next($request);
     }

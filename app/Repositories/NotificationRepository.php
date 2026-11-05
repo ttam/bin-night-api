@@ -22,7 +22,7 @@ final readonly class NotificationRepository implements NotificationRepositoryInt
 {
     public function createNotification(AuthenticatedUser $authenticatedUser, CreateNotification $data): Notification
     {
-        $userId = User::query()->where('external_id', $authenticatedUser->id)->value('id');
+        $userId = $authenticatedUser->user?->getKey() ?? User::query()->where('external_id', $authenticatedUser->id)->value('id');
 
         $notification = new Notification()->fill([
             'lead_days' => $data->leadDays,

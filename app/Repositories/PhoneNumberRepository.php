@@ -17,7 +17,7 @@ final readonly class PhoneNumberRepository implements PhoneNumberRepositoryInter
 {
     public function findOrCreate(AuthenticatedUser $user, string $number): PhoneNumber
     {
-        $userId = User::query()->where('external_id', $user->id)->value('id');
+        $userId = $user->user?->getKey() ?? User::query()->where('external_id', $user->id)->value('id');
         $mine = static fn (): Builder => new PhoneNumber()->newQuery()->where('user_id', $userId)->where('number', $number);
 
         $phoneNumber = $mine()->first();

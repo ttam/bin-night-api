@@ -23,7 +23,7 @@ final readonly class ActiveEntityRepository implements ActiveEntityRepositoryInt
 
     public function getActiveEntitiesForUser(AuthenticatedUser $user): ActiveEntities
     {
-        $owner = User::query()->where('external_id', '=', $user->id)->firstOrFail();
+        $owner = $user->user ?? User::query()->where('external_id', '=', $user->id)->firstOrFail();
         /** @var string $userId */
         $userId = $owner->getKey();
         $planLimits = $this->planRepository->getLimits($owner->plan);

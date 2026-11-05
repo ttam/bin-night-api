@@ -39,6 +39,28 @@ final class ProvisionUserTest extends TestCase
         self::assertSame('provisioned', $response->getContent());
     }
 
+    public function testTheRestOfTheRequestIsHandedTheUserRowSoNobodyHasToLookItUpAgain(): void
+    {
+        $authenticated = new AuthenticatedUser(['sub' => 'user_111', 'name' => 'Marty McFly']);
+        $request = Request::create('/api/v1/houses')->setUserResolver(static fn (): AuthenticatedUser => $authenticated);
+        $user = new User();
+
+        $users = $this->createStub(UserRepositoryInterface::class);
+        $users->method('createUserFromAuthenticatedUser')->willReturn($user);
+
+        $seen = null;
+        new ProvisionUser($users)->handle($request, static function (Request $request) use (&$seen): Response {
+            $seen = AuthenticatedUser::fromRequest($request);
+
+            return new Response();
+        });
+
+        self::assertInstanceOf(AuthenticatedUser::class, $seen);
+        self::assertSame($user, $seen->user);
+        self::assertSame('user_111', $seen->id);
+        self::assertSame('Marty McFly', $seen->name);
+    }
+
     public function testAnAccountThatWasDeletedIsNotAuthenticatedAndTheRequestGoesNoFurther(): void
     {
         $request = Request::create('/api/v1/houses')->setUserResolver(static fn (): AuthenticatedUser => new AuthenticatedUser(['sub' => 'user_111']));

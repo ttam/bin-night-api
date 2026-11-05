@@ -15,7 +15,8 @@ final class ShowController
 {
     public function __invoke(Request $request, PlanRepositoryInterface $plans, UserRepositoryInterface $users): MeResource
     {
-        $plan = $users->getUserFromExternalId(AuthenticatedUser::fromRequest($request)->id)->plan;
+        $authenticated = AuthenticatedUser::fromRequest($request);
+        $plan = ($authenticated->user ?? $users->getUserFromExternalId($authenticated->id))->plan;
 
         return new MeResource(new PlanSummary($plan, $plans->getLimits($plan)));
     }

@@ -54,18 +54,19 @@ final readonly class UserRepository implements UserRepositoryInterface
 
     public function createUserFromAuthenticatedUser(AuthenticatedUser $authenticatedUser): User
     {
-        // Their data is kept, but a token from a deleted account is not a way back in, and must not make a second user.
-        if (new User()->newQuery()->onlyTrashed()->where('external_id', $authenticatedUser->id)->exists()) {
-            throw new AccountDeletedException('This account has been deleted.');
-        }
-
         $profile = \array_filter([
             'email' => $authenticatedUser->email,
             'external_id' => $authenticatedUser->id,
             'name' => $authenticatedUser->name,
         ], static fn (?string $value): bool => $value !== null);
 
-        $user = new User()->newQuery()->where('external_id', '=', $authenticatedUser->id)->first();
+        // One look, including a deleted account: their data is kept, but a token from it is not a way back in, and must not
+        // make a second user.
+        $user = new User()->newQuery()->withTrashed()->where('external_id', '=', $authenticatedUser->id)->first();
+
+        if ($user?->trashed() === true) {
+            throw new AccountDeletedException('This account has been deleted.');
+        }
 
         if ($user === null) {
             $user = new User()->fill($profile);

@@ -45,7 +45,8 @@ final class Authorize extends Middleware
      */
     public function handle($request, Closure $next, $ability, ...$models)
     {
-        $user = $this->userRepository->getUserFromExternalId(AuthenticatedUser::fromRequest($request)->id);
+        $authenticated = AuthenticatedUser::fromRequest($request);
+        $user = $authenticated->user ?? $this->userRepository->getUserFromExternalId($authenticated->id);
         $this->gate = $this->gate->forUser($user);
 
         /** @var string $name */

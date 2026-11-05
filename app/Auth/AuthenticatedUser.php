@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Auth;
 
 use App\Auth\Exceptions\AuthenticationFailedException;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 final readonly class AuthenticatedUser
@@ -15,8 +16,11 @@ final readonly class AuthenticatedUser
 
     public ?string $name;
 
-    /** @param array<mixed> $claims */
-    public function __construct(public array $claims = [])
+    /**
+     * @param array<mixed> $claims
+     * @param User|null $user the user's row, once the request has been through provisioning (see `withUser()`)
+     */
+    public function __construct(public array $claims = [], public ?User $user = null)
     {
         $sub = $claims['sub'] ?? null;
 
@@ -37,6 +41,15 @@ final readonly class AuthenticatedUser
         $user = ($request->getUserResolver())();
 
         return $user;
+    }
+
+    /**
+     * The same token's user, with their row from the database. Provisioning finds or makes that row once for the request,
+     * and everything after it (the policies, the plan, the repositories) reads it from here instead of asking again.
+     */
+    public function withUser(User $user): self
+    {
+        return new self($this->claims, $user);
     }
 
     private static function cleanClaim(mixed $value): ?string

@@ -23,7 +23,7 @@ final readonly class BinRepository implements BinRepositoryInterface
 
     public function createBin(AuthenticatedUser $authenticatedUser, CreateBin $data): Bin
     {
-        $userId = User::query()->where('external_id', $authenticatedUser->id)->value('id');
+        $userId = $authenticatedUser->user?->getKey() ?? User::query()->where('external_id', $authenticatedUser->id)->value('id');
 
         $bin = new Bin()->fill([
             'bin_color' => $data->binColor,

@@ -21,8 +21,9 @@ final class CreateHouseRequest extends AbstractHouseRequest
     {
         $rules = parent::rules();
 
+        $authenticated = AuthenticatedUser::fromRequest($this);
         /** @var string|null $userId */
-        $userId = User::query()->where('external_id', '=', AuthenticatedUser::fromRequest($this)->id)->value('id');
+        $userId = $authenticated->user?->getKey() ?? User::query()->where('external_id', '=', $authenticated->id)->value('id');
         $rules['name'][] = Rule::unique('houses', 'name')->where('user_id', $userId);
 
         return $rules;

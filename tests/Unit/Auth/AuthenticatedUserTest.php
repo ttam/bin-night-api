@@ -6,6 +6,7 @@ namespace Tests\Unit\Auth;
 
 use App\Auth\AuthenticatedUser;
 use App\Auth\Exceptions\AuthenticationFailedException;
+use App\Models\User;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -81,5 +82,19 @@ final class AuthenticatedUserTest extends TestCase
 
         self::assertNull($user->email);
         self::assertNull($user->name);
+    }
+
+    public function testWithUserIsTheSameTokenWithTheUsersRow(): void
+    {
+        $authenticated = new AuthenticatedUser(['sub' => 'user_111', 'name' => 'Marty McFly']);
+        $user = new User();
+
+        $with = $authenticated->withUser($user);
+
+        self::assertNull($authenticated->user);
+        self::assertSame($user, $with->user);
+        self::assertSame('user_111', $with->id);
+        self::assertSame('Marty McFly', $with->name);
+        self::assertSame($authenticated->claims, $with->claims);
     }
 }

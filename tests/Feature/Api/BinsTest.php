@@ -82,6 +82,55 @@ final class BinsTest extends ApiTestCase
             ->assertJsonValidationErrors(['bin_color', 'cycle', 'lid_color', 'name']);
     }
 
+    /** @return iterable<string, array{mixed}> */
+    public static function badColours(): iterable
+    {
+        yield 'three digits' => ['#abc'];
+        yield 'four digits' => ['#abcd'];
+        yield 'eight digits, which the column cannot hold' => ['#aabbccdd'];
+        yield 'without the hash' => ['aabbcc'];
+        yield 'not hex' => ['#gggggg'];
+        yield 'a name' => ['red'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badColours')]
+    public function testCreateRejectsAColourThatIsNotSixHexDigits(mixed $colour): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        foreach (['bin_color' => 'The bin colour must be a colour like #0061a4.', 'lid_color' => 'The lid colour must be a colour like #0061a4.'] as $field => $message) {
+            $this->postJson('/api/v1/bins', [...$this->validPayload($houseId), $field => $colour])
+                ->assertUnprocessable()
+                ->assertJsonPath("errors.{$field}.0", $message);
+        }
+
+        self::assertSame(0, DB::table('bins')->count());
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badColours')]
+    public function testUpdateRejectsAColourThatIsNotSixHexDigits(mixed $colour): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+        $binId = $this->createBin($houseId, 'Rubbish', '1985-10-26 01:21:00');
+
+        $this->patchJson('/api/v1/bins/' . $binId, ['bin_color' => $colour])->assertUnprocessable()->assertJsonValidationErrors(['bin_color']);
+        $this->patchJson('/api/v1/bins/' . $binId, ['lid_color' => $colour])->assertUnprocessable()->assertJsonValidationErrors(['lid_color']);
+
+        self::assertSame('000000', DB::table('bins')->where('id', $binId)->value('bin_color'));
+    }
+
+    public function testAColourInEitherCaseIsKeptAsSixDigits(): void
+    {
+        $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');
+
+        $this->postJson('/api/v1/bins', [...$this->validPayload($houseId), 'bin_color' => '#AABBCC', 'lid_color' => '#0061a4'])
+            ->assertCreated()
+            ->assertJsonPath('data.bin_color', '#AABBCC')
+            ->assertJsonPath('data.lid_color', '#0061a4');
+
+        self::assertSame('AABBCC', DB::table('bins')->value('bin_color'));
+    }
+
     public function testCreateRequiresAStartDate(): void
     {
         $houseId = $this->createHouse('Hill Valley', '1985-10-26 01:21:00');

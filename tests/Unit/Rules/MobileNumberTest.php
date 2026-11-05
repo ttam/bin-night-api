@@ -15,7 +15,7 @@ final class MobileNumberTest extends TestCase
     protected function setUp(): void
     {
         $container = new Container();
-        $container->instance('config', new Repository(['phone' => ['mobile_patterns' => ['AU' => '/^\+614\d{8}$/', 'NZ' => '/^\+642\d{7,9}$/']]]));
+        $container->instance('config', new Repository(['phone' => ['mobile_patterns' => ['AU' => '/^\+614\d{8}$/D', 'NZ' => '/^\+642\d{7,9}$/D']]]));
         Container::setInstance($container);
     }
 
@@ -34,6 +34,7 @@ final class MobileNumberTest extends TestCase
         yield 'local format' => ['0400000000', false];
         yield 'with spaces' => ['+61 400 000 000', false];
         yield 'too long' => ['+614000000000', false];
+        yield 'a final newline' => ["+61400000000\n", false];
         yield 'empty' => ['', false];
         yield 'not a string' => [61400000000, false];
     }

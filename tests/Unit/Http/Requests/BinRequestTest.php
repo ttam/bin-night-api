@@ -16,6 +16,7 @@ use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
 use Illuminate\Validation\DatabasePresenceVerifier;
 use Illuminate\Validation\Validator;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Unit\TestCase;
 
 final class BinRequestTest extends TestCase
@@ -25,6 +26,30 @@ final class BinRequestTest extends TestCase
         $this->bootEloquent()->migrate();
     }
 
+    /** @return iterable<string, array{mixed}> */
+    public static function getBadColours(): iterable
+    {
+        yield 'Three digits' => ['#abc'];
+
+        yield 'Four digits' => ['#abcd'];
+
+        yield 'Eight digits' => ['#aabbccdd'];
+
+        yield 'Without the hash' => ['aabbcc'];
+
+        yield 'Not hex' => ['#gggggg'];
+
+        yield 'A name' => ['red'];
+
+        yield 'A number' => [123456];
+
+        yield 'An array' => [['#aabbcc']];
+
+        yield 'Trailing text' => ["#aabbcc\n"];
+
+        yield 'Empty' => [''];
+    }
+
     public function testAuthorize(): void
     {
         $request = new class() extends AbstractBinRequest {
@@ -32,6 +57,43 @@ final class BinRequestTest extends TestCase
         };
 
         self::assertTrue($request->authorize());
+    }
+
+    #[DataProvider('getBadColours')]
+    public function testCreateRequestFailsWithAColourThatIsNotSixHexDigits(mixed $colour): void
+    {
+        foreach (['bin_color', 'lid_color'] as $field) {
+            $request = new CreateBinRequest();
+            $data = ['bin_color' => '#00dd00', 'lid_color' => '#00dd00', $field => $colour];
+            $validator = $this->getValidator($data, ['bin_color' => $request->rules()['bin_color'], 'lid_color' => $request->rules()['lid_color']], $request->messages());
+
+            self::assertFalse($validator->passes(), $field);
+            self::assertSame([$field], \array_keys($validator->errors()->toArray()));
+        }
+    }
+
+    public function testCreateRequestAcceptsAnyCaseOfSixHexDigits(): void
+    {
+        $request = new CreateBinRequest();
+
+        foreach (['#aabbcc', '#AABBCC', '#0061a4', '#F0C800'] as $colour) {
+            $validator = $this->getValidator(['bin_color' => $colour, 'lid_color' => $colour], ['bin_color' => $request->rules()['bin_color'], 'lid_color' => $request->rules()['lid_color']]);
+
+            self::assertTrue($validator->passes(), $colour);
+        }
+    }
+
+    public function testColourMessagesSayWhatIsWanted(): void
+    {
+        $request = new CreateBinRequest();
+        $validator = $this->getValidator(['bin_color' => '#abc', 'lid_color' => '#abc'], ['bin_color' => $request->rules()['bin_color'], 'lid_color' => $request->rules()['lid_color']], $request->messages());
+
+        $validator->passes();
+
+        self::assertSame([
+            'bin_color' => ['The bin colour must be a colour like #0061a4.'],
+            'lid_color' => ['The lid colour must be a colour like #0061a4.'],
+        ], $validator->errors()->toArray());
     }
 
     public function testCreateRequestAllowsSameNameInAnotherHouse(): void
@@ -179,9 +241,9 @@ final class BinRequestTest extends TestCase
         self::assertTrue($validator->passes());
     }
 
-    private function getValidator(array $data, array $rules): Validator
+    private function getValidator(array $data, array $rules, array $messages = []): Validator
     {
-        $validator = new Validator(new Translator(new ArrayLoader(), 'en-AU'), $data, $rules);
+        $validator = new Validator(new Translator(new ArrayLoader(), 'en-AU'), $data, $rules, $messages);
         $validator->setPresenceVerifier(new DatabasePresenceVerifier(Bin::getConnectionResolver()));
 
         return $validator;

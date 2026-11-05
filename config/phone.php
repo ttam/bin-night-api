@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 return [
     /*
-     * The numbers we send to, as a pattern each. Adding a country is adding a pattern here.
+     * The numbers we send to, as a pattern each. Adding a country is adding a pattern here. End each with `$/D`: without
+     * the D, `$` also matches before a final newline, and "+61400000000\n" would be a number.
      */
     'mobile_patterns' => [
-        'AU' => '/^\+614\d{8}$/',
+        'AU' => '/^\+614\d{8}$/D',
     ],
 
     /*
